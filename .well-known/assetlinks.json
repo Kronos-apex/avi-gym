@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "io.github.kronos_apex.twa",
+        "sha256_cert_fingerprints": ["40:B3:06:86:32:21:E3:F7:CC:3F:D8:F3:B0:10:E4:6E:99:A7:27:35:DE:53:2F:4C:91:7F:DD:47:21:D5:59:8C"]
+      }
+    }]
