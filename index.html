@@ -2128,7 +2128,7 @@ function sbAuthClient(){
   if(_sbc)return _sbc;
   if(!sbAuthReady())return null;
   _sbc=window.supabase.createClient(SB_URL,SB_KEY,{
-    auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storageKey:'avi_auth'}
+    auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storageKey:'avigym_auth'}
   });
   return _sbc;
 }
