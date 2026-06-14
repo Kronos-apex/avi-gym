@@ -302,20 +302,59 @@ function _genRank(e) {
 
 // Selector con rotación: avanza un cursor por (muscle|type) para que A y B no salgan idénticos.
 // Cae a "solo músculo" si el slot exacto (type) está agotado o vacío (ej. Funcional escaso).
+// ── NIVEL DE DIFICULTAD POR EJERCICIO (id → P/I/A) ──────────────────────
+// Borrador aprobado por Camilo (2026-06-14). Gobierna el gate del generador:
+// un Principiante NUNCA recibe movimientos avanzados (sentadilla a una pierna,
+// dominadas, rueda abdominal, flexión pica, fondos…). Editable. Un ejercicio con
+// `level` propio manda sobre este mapa; lo no listado cae a 'I' por seguridad.
+const EX_LEVEL = {
+  e1:'I',e2:'I',e110:'I',e3:'P',e71:'I',e84:'P',e85:'P',e86:'P',e111:'P',e112:'I',e77:'P',e78:'P',e113:'P',e83:'I',
+  e4:'A',e5:'I',e6:'P',e24:'P',e25:'P',e26:'P',e27:'P',e28:'P',e34:'A',e50:'A',e51:'P',e52:'P',e104:'P',e114:'P',e116:'I',e137:'I',e82:'P',
+  e7:'I',e8:'P',e21:'P',e22:'I',e23:'P',e53:'P',e54:'P',e97:'A',e98:'P',e99:'P',e100:'P',e109:'P',e115:'P',e117:'P',e118:'I',e119:'P',e138:'P',
+  e9:'P',e10:'P',e29:'P',e55:'P',e56:'P',e101:'P',e102:'P',e103:'A',e120:'P',e121:'P',e139:'P',e140:'P',
+  e11:'P',e12:'I',e19:'A',e30:'P',e31:'P',e57:'I',e105:'P',e122:'P',e123:'A',e79:'P',
+  e13:'I',e14:'I',e15:'P',e16:'P',e33:'P',e35:'I',e36:'P',e37:'P',e39:'P',e40:'A',e41:'I',e58:'P',e59:'P',e70:'P',e80:'P',e93:'P',e95:'A',e107:'P',e108:'A',e124:'I',e125:'I',e126:'P',e127:'A',e128:'P',
+  e42:'I',e43:'P',e44:'P',e45:'P',e60:'P',e46:'I',e61:'P',e73:'P',e87:'P',e88:'P',e89:'P',e90:'P',e91:'P',e92:'I',e94:'P',e96:'P',e106:'I',e129:'P',e130:'P',
+  e17:'P',e18:'P',e47:'A',e48:'A',e49:'P',e62:'P',e63:'I',e72:'P',e81:'I',e131:'P',e132:'P',e133:'P',e134:'P',
+  e20:'P',e64:'P',e65:'P',e66:'I',e67:'P',e74:'A',e75:'A',e76:'I',e135:'P',
+  e68:'I',e69:'A',e136:'P',
+};
+const _LVL_RANK = { P: 0, I: 1, A: 2 };
+function exLevel(ex) {
+  const v = (ex && (ex.level || EX_LEVEL[ex.id])) || 'I';
+  return (v === 'P' || v === 'I' || v === 'A') ? v : 'I';
+}
+function exLevelRank(ex) { return _LVL_RANK[exLevel(ex)]; }
+// Tope de nivel + preferencia según el perfil. Principiante: P primero, I solo como
+// respaldo cuando un músculo no tiene opción P, NUNCA A. Intermedio: P+I. Avanzado: todo.
+function _levelGate(level) {
+  if (level === 'Avanzado') return { cap: 2, preferP: false };
+  if (level === 'Intermedio') return { cap: 1, preferP: false };
+  return { cap: 1, preferP: true };
+}
+
 function _genPick(lib, muscle, type, st) {
+  const cap = st.levelCap == null ? 2 : st.levelCap;
   const ok = e => e.muscle === muscle && !st.exclude(e)
+    && exLevelRank(e) <= cap // gate por nivel: el ejercicio no puede exceder el tope del cliente
     && (!st.tier || (e.tier || 'premium') === st.tier)
     && (e.env || ['gym']).includes(st.place); // entorno: el ejercicio debe ser realizable ahí
   // Pools en orden de prioridad. Se usa el primero que tenga algo sin usar hoy:
   //  1) methodBias (ej. calistenia → peso corporal) ANTES que el tipo del slot,
   //  2) tipo exacto del slot, 3) fallback solo-músculo (cuando el tipo está agotado/vacío).
+  // `extra` permite anteponer una tanda más estricta (ej. solo-Principiante) antes de la normal.
+  const addTier = extra => {
+    if (st.preferType) pools.push(lib.filter(e => ok(e) && e.type === st.preferType && extra(e)));
+    // Perfil de carga 'high' (IMC/cintura altos): prioriza variantes guiadas/asistidas
+    // (máquina, polea, prensa…) DENTRO del tipo del slot, antes de las libres.
+    if (st.preferName) pools.push(lib.filter(e => ok(e) && (type ? e.type === type : true) && st.preferName.test(_norm(e.name)) && extra(e)));
+    pools.push(lib.filter(e => ok(e) && (type ? e.type === type : true) && extra(e)));
+    pools.push(lib.filter(e => ok(e) && extra(e)));
+  };
   const pools = [];
-  if (st.preferType) pools.push(lib.filter(e => ok(e) && e.type === st.preferType));
-  // Perfil de carga 'high' (IMC/cintura altos): prioriza variantes guiadas/asistidas
-  // (máquina, polea, prensa…) DENTRO del tipo del slot, antes de las libres.
-  if (st.preferName) pools.push(lib.filter(e => ok(e) && (type ? e.type === type : true) && st.preferName.test(_norm(e.name))));
-  pools.push(lib.filter(e => ok(e) && (type ? e.type === type : true)));
-  pools.push(lib.filter(ok));
+  // Principiante: agota TODAS las opciones de nivel P antes de permitir Intermedio.
+  if (st.preferP) addTier(e => exLevelRank(e) === 0);
+  addTier(() => true);
   let pool = null;
   for (const p of pools) { if (p.some(e => !st.usedInDay.has(e.id))) { pool = p; break; } }
   if (!pool) {
@@ -378,8 +417,10 @@ function generarRutinas(client, lib, opts) {
   const methodBias = opts.methodBias || null;        // del estilo/preset (calistenia/funcional/...)
   const loadProfile = opts.loadProfile === 'high' ? 'high' : 'normal'; // por IMC/cintura (ver bodyLoadProfile)
   const highLoad = loadProfile === 'high';
+  const _gate = _levelGate(level); // tope/preferencia de dificultad por perfil (Principiante NUNCA recibe avanzados)
   const st = {
     cursors: {}, seed: opts.seed || 0, tier: opts.tier || null, place,
+    levelCap: _gate.cap, preferP: _gate.preferP,
     preferType: methodBias === 'calistenia' ? 'Bodyweight' : methodBias === 'funcional' ? 'Funcional' : null,
     preferName: highLoad ? GEN_ASSISTED_RE : null, // perfil alto → variantes guiadas/asistidas primero
     scheme, usedInDay: new Set(), exclude: _genMakeExcluder(lim, minor, highLoad), envShortfall: new Set(),
@@ -911,6 +952,9 @@ if (typeof module !== 'undefined' && module.exports) {
     generarRutinas,
     parseLimitations,
     genSchemeFor,
+    EX_LEVEL,
+    exLevel,
+    exLevelRank,
     inferExerciseEnv,
     ENV_ALL,
     mergeHistory,
