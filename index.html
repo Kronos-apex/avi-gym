@@ -697,9 +697,9 @@ html[data-theme="light"] .mta {
 .wf-feeling-lbl{font-size:11.5px;color:var(--brand);font-weight:700;min-height:15px;margin-top:8px;text-shadow:0 1px 8px rgba(0,0,0,.5)}
 .wf-btn{width:100%;max-width:420px;padding:16px;background:linear-gradient(135deg,var(--brand-strong),var(--brand-green));color:var(--on-brand);border:none;border-radius:15px;font-family:inherit;font-size:16px;font-weight:800;cursor:pointer;transition:transform .1s;box-shadow:0 12px 34px rgba(var(--brand-rgb),.34),inset 0 1px 0 rgba(255,255,255,.4)}
 .wf-btn:active{transform:scale(.985)}
-/* ── MOMENTOS FULL-BLEED: upsell Premium + subida de nivel (reusan el molde .wf-*) ── */
-#premium-upsell,#level-up{position:fixed;inset:0;z-index:905;display:none;background:#04080A;overflow:hidden}
-#premium-upsell.on,#level-up.on{display:block;animation:wfFade .4s ease}
+/* ── MOMENTO FULL-BLEED: subida de nivel (reusa el molde .wf-*) ── */
+#level-up{position:fixed;inset:0;z-index:905;display:none;background:#04080A;overflow:hidden}
+#level-up.on{display:block;animation:wfFade .4s ease}
 .wf-eyebrow.gold{color:var(--gold)}
 .pu-bens{width:100%;max-width:420px;display:flex;flex-direction:column;gap:7px;margin-bottom:18px}
 .pu-ben{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.13);border-radius:13px;padding:10px 13px;text-align:left;backdrop-filter:blur(6px)}
@@ -2217,9 +2217,9 @@ const UD={
 let AUTH_MODE=false;
 let AUTH_ROLE='client'; // 'client' | 'coach' — rol del usuario auth logueado
 let COACH_SELF=false;   // true cuando el coach está viendo SU propio entrenamiento (guarda en su fila)
-// UID del coach (modelo de un solo coach). Un usuario libre que pide coach se auto-asigna
-// este coach_id para que su fila sea visible por RLS (select: coach_id = auth.uid()) y la
-// solicitud + mensajes lleguen a la bandeja del coach. Ver requestCoach().
+// UID del coach (modelo de un solo coach). Cada socio se provisiona con este coach_id
+// para que su fila sea visible por RLS (select: coach_id = auth.uid()) y sus mensajes
+// lleguen a la bandeja del coach/recepción.
 const COACH_UID='b5a4cd43-c23b-4379-9bbd-f8733dd45aaf';
 
 // Convierte VAPID key de base64 a Uint8Array
@@ -4029,9 +4029,7 @@ syncFromCloud().then(async ()=>{
     // Lightbox de imagen/video (lo más arriba) → cerrar primero
     const lb=document.getElementById('ex-lightbox');
     if(lb&&lb.classList.contains('on')){closeExImg();return;}
-    // Momentos full-bleed (upsell / nivel / fin de entreno) → cerrar con atrás
-    const pu=document.getElementById('premium-upsell');
-    if(pu&&pu.classList.contains('on')){closePremiumUpsell();return;}
+    // Momentos full-bleed (nivel / fin de entreno) → cerrar con atrás
     const lu=document.getElementById('level-up');
     if(lu&&lu.classList.contains('on')){closeLevelUp();return;}
     const wfo=document.getElementById('workout-finish');
@@ -4753,8 +4751,8 @@ async function _provisionFreeClient(authUser, p){
   // Siempre auto-generamos la semana (con defaults si faltara algún dato) — ya no hay 2ª pantalla
   // "Cuéntanos de ti". El wizard premium ya recoge el perfil; el usuario puede regenerar desde Rutinas.
   try{ _autoGenerateWeek(rec); }catch(e){ warn('AVI: auto-generación falló (no bloquea):',e&&e.message); }
-  // coachId=COACH_UID → la fila es visible para el coach por RLS (ve TODOS los registros como leads,
-  // con tag 🆓 Libre o 🙋 Quiere coach). El usuario sigue tier:'libre' (premium bloqueado hasta convertir).
+  // coachId=COACH_UID → la fila es visible para el coach por RLS (ve TODOS los socios del gym).
+  // AVI GYM (B2B): el socio entra con TODO desbloqueado; no hay tier que limite funciones.
   try{ await UD.createFromClient(rec,{role:'client',coachId:COACH_UID}); }
   catch(e){ warn('AVI: crear fila user_data falló:',e&&e.message); }
   return rec;
@@ -5035,61 +5033,11 @@ function clientSelfGenerate(){
   }catch(e){ warn('AVI: regenerar libre falló:',e&&e.message); toast('No se pudo generar, intenta de nuevo'); }
 }
 
-// ── Invitación a Premium / coach real (solo modo libre) ──
-function coachUpsellHTML(c){
-  return ''; // AVI GYM (B2B): el socio paga vía el gym → entra con TODO desbloqueado, sin upsell a Premium/coach
-  if(!c||!c.selfReg)return ''; // los de coach ya tienen coach
-  if(c.wantsCoach){
-    return `<div style="background:var(--gl);border:1px solid var(--g2);border-radius:var(--r);padding:12px 14px;margin-bottom:12px;font-size:13px;color:var(--gt);line-height:1.5">✅ <b>¡Solicitud enviada!</b> Tu coach te contactará pronto para guiarte de cerca. 💪</div>`;
-  }
-  return `<div style="background:linear-gradient(135deg,var(--brand-dark),var(--brand-deep));border-radius:var(--r);padding:14px 16px;margin-bottom:12px;color:#fff;box-shadow:0 6px 18px rgba(27,67,50,.25)">
-    <div style="font-size:14px;font-weight:800;margin-bottom:4px">🌟 ¿Quieres un coach real que te guíe?</div>
-    <div style="font-size:12px;opacity:.92;line-height:1.55;margin-bottom:11px">Pásate a <b>Premium</b>: un entrenador ajusta tu plan a ti, corrige tu técnica y te acompaña semana a semana. Aquí no entrenas solo.</div>
-    <button onclick="showPremiumUpsell()" style="width:100%;padding:11px;background:var(--brand);color:var(--on-brand);border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:800;cursor:pointer">Quiero un coach →</button>
-  </div>`;
-}
-function renderCoachUpsell(c){
-  ['cn-today-upsell','cn-profile-upsell'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=coachUpsellHTML(c);});
-}
-// Candado para funciones Premium (modo libre): atenuado + invitación a coach.
-function premiumLockHTML(title,desc){
-  return `<div style="background:var(--w);border:1px dashed var(--br2);border-radius:var(--r);padding:18px 16px;text-align:center">
-    <div style="font-size:26px;margin-bottom:6px">🔒</div>
-    <div style="font-size:14px;font-weight:800;color:var(--t1);margin-bottom:4px">${esc(title)}</div>
-    <div style="font-size:12px;color:var(--t2);line-height:1.5;margin-bottom:12px">${esc(desc)} Disponible con un <b>coach (Premium)</b>.</div>
-    <button onclick="showPremiumUpsell()" style="padding:10px 18px;background:var(--brand);color:var(--on-brand);border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:800;cursor:pointer">Quiero un coach →</button>
-  </div>`;
-}
-// Cliente actual (para gating en vistas del asesorado).
+// AVI GYM (B2B): sin upsell a Premium ni candados — el socio paga vía el gym y entra con
+// TODO desbloqueado. Las funciones coachUpsellHTML/renderCoachUpsell/premiumLockHTML y el
+// momento full-bleed de upsell se eliminaron en la limpieza del 2026-06-15.
+// Cliente actual (para vistas del asesorado).
 function _curClient(){ return DB.clients.find(x=>x.id===CUR.clientId); }
-async function requestCoach(){
-  const c=DB.clients.find(x=>x.id===CUR.clientId);if(!c)return;
-  c.wantsCoach=true;c.wantsCoachAt=new Date().toISOString();c.coach_id=COACH_UID;
-  svNow('ax_c',DB.clients);
-  // Avisar al coach por el chat: le llega a su bandeja + notificación vía su sondeo.
-  if(!DB.msgs[c.id])DB.msgs[c.id]=[];
-  DB.msgs[c.id].push({from:'client',text:'🙋 ¡Hola! Me gustaría pasar a Premium y tener un coach que me guíe. ¿Me cuentas cómo seguir?',date:new Date().toISOString()});
-  svNow('ax_m',DB.msgs);
-  // CLAVE: asignar coach_id en la fila (columna, no profile) para que el coach pueda LEERLA
-  // por RLS (select: coach_id = auth.uid()). Sin esto, la solicitud y el mensaje quedaban
-  // atrapados en una fila con coach_id=null que el coach nunca cargaba. upsert parcial
-  // preserva las demás columnas. Ver fix bug "solicitudes de coach invisibles" 2026-06-07.
-  try{ if(AUTH_MODE) await UD.upsertOwn({coach_id:COACH_UID}); }
-  catch(e){ warn('AVI: no se pudo asignar coach_id en requestCoach:',e&&e.message); }
-  renderCoachUpsell(c);
-  toast('🎉 ¡Listo! Tu coach te contactará pronto.');
-}
-
-// El coach activa Premium a un lead libre → desbloquea todas las funciones.
-function convertToPremium(cid){
-  const c=DB.clients.find(x=>x.id===cid);if(!c)return;
-  if(!confirm(`¿Activar Premium para ${c.name}? Tendrá chat, nutrición, fotos/medidas y analítica.`))return;
-  c.tier='premium';c.wantsCoach=false;c.updatedAt=new Date().toISOString();
-  svNow('ax_c',DB.clients);
-  toast(`⭐ ${c.name.split(' ')[0]} ahora es Premium`);
-  openDetail(cid);renderClients();renderHome();
-}
-
 function openDetail(id){
   const c=DB.clients.find(x=>x.id===id);if(!c)return;CUR.clientId=id;
   const av=document.getElementById('d-av');
@@ -5895,7 +5843,6 @@ function renderPRsInProfile(clientId){
 }
 
 function renderClientProfile(client){
-  renderCoachUpsell(client);
   renderGoogleLink();
   // Current weight from bodyweight log (most recent entry)
   const bwEntries=DB.bodyweight[client.id]||[];
@@ -6096,7 +6043,6 @@ function renderTodayHead(client){
 function renderClientToday(client, overrideRoutine){
   const con=document.getElementById('cn-today-body');
   renderTodayHead(client);
-  renderCoachUpsell(client);
   const routines=client.routines||[];
   if(!routines.length){con.innerHTML='<div class="noroutine"><div style="font-size:32px;margin-bottom:10px">📋</div><div style="font-size:14px;font-weight:700;color:var(--gt);margin-bottom:6px">Tu plan aún está en preparación</div><div style="font-size:12px;color:var(--t2);margin-bottom:14px">Tu coach está personalizando tu rutina. Mientras tanto, puedes enviarle un mensaje.</div><button class="btn bp bsm" onclick="cnTab(\'cn-messages\',document.getElementById(\'tab-msgs\'))">Ir a mensajes →</button></div>';return}
   const days=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
@@ -6761,29 +6707,8 @@ function wfConfetti(){
   }
 }
 
-// ── Momentos full-bleed: upsell Premium + subida de nivel (reusan el molde wf-*) ──
-const PU_DEFAULT_PHOTO=(window.GYM_MEDIA&&GYM_MEDIA.ob3)||'media/brand/ob-3.jpg';
-function showPremiumUpsell(){
-  return; // AVI GYM (B2B): no existe upsell a Premium — el momento full-bleed queda inerte
-  const c=_curClient(); if(!c||!(c.selfReg||isFreeClient(c)))return;
-  document.getElementById('pu-photo').style.backgroundImage=`url('${window.AVI_UPSELL_PHOTO||PU_DEFAULT_PHOTO}')`;
-  _puState(!!c.wantsCoach);
-  document.getElementById('premium-upsell').classList.add('on');
-  document.body.style.overflow='hidden';
-}
-function _puState(sent){
-  document.getElementById('pu-sell').style.display=sent?'none':'flex';
-  document.getElementById('pu-sent').style.display=sent?'flex':'none';
-}
-async function puConfirm(){
-  const btn=document.getElementById('pu-cta');btn.disabled=true;
-  try{ await requestCoach(); _puState(true); wfConfetti(); }
-  finally{ btn.disabled=false; }
-}
-function closePremiumUpsell(){
-  document.getElementById('premium-upsell').classList.remove('on');
-  document.body.style.overflow='';
-}
+// ── Momento full-bleed: subida de nivel (reusa el molde wf-*) ──
+// AVI GYM (B2B): el momento full-bleed de upsell a Premium se eliminó (2026-06-15).
 
 const LU_DEFAULT_PHOTO=(window.GYM_MEDIA&&GYM_MEDIA.reveal)||'media/brand/reveal.jpg';
 let _pendingLevelUp=null; // detectado en showWorkoutFinish → se celebra al cerrar ese overlay
@@ -6831,9 +6756,8 @@ function clientWeekEditorial(client){
 function renderClientAllRoutines(client){
   const ed=document.getElementById('cn-week-ed');
   const con=document.getElementById('cn-all-rut');const routines=sortRoutinesByDay(client.routines||[]);
-  // Puede editar su propia rutina: el coach en su entreno, o un cliente LIBRE (sin coach que se la
-  // gestione). Los asesorados premium NO editan (su coach lo hace). Las gráficas siguen siendo premium,
-  // pero armar/ajustar ejercicios está disponible para el libre que solo quiere registrar.
+  // Puede editar su propia rutina: el coach en su entreno, o un socio auto-registrado (sin
+  // entrenador que se la gestione). Los socios que un entrenador administra no la editan.
   const canEdit=COACH_SELF||isFreeClient(client);
   if(ed)ed.innerHTML=routines.length?clientWeekEditorial(client):'';
   if(!routines.length){
@@ -6876,8 +6800,7 @@ function renderClientAllRoutines(client){
 function renderVolChart(sessions){
   const wrap=document.getElementById('vol-chart-wrap');
   const con=document.getElementById('vol-chart');
-  if(wrap&&isFreeClient(_curClient())){wrap.style.display='none';return;} // analítica avanzada = Premium
-  if(!wrap||!con)return;
+  if(!wrap||!con)return; // AVI GYM (B2B): analítica avanzada desbloqueada para todo socio
   const withVol=sessions.filter(s=>s.totalVol>0).slice(0,12).reverse();
   if(withVol.length<2){wrap.style.display='none';return;}
   wrap.style.display='block';
@@ -7000,11 +6923,7 @@ function updateMsgBadge(clientId){
 function renderClientMsgs(clientId){
   const msgs=DB.msgs[clientId]||[];const con=document.getElementById('cn-msg-thread');con.innerHTML='';
   const composer=document.getElementById('cn-msg-composer');
-  if(isFreeClient(DB.clients.find(x=>x.id===clientId))){
-    if(composer)composer.style.display='none';
-    con.innerHTML=premiumLockHTML('Chat con tu coach','Habla directo con un entrenador que te guía y te responde.');
-    return;
-  }
+  // AVI GYM (B2B): chat desbloqueado para todo socio (sin candado Premium)
   if(composer)composer.style.display='';
   if(!msgs.length){con.innerHTML='<div style="text-align:center;padding:18px;color:var(--t3);font-size:13px">Tu coach todavía no te ha escrito.<br>Puedes escribirle tú primero 👇</div>';return}
   msgs.forEach(m=>{
@@ -7332,7 +7251,6 @@ function renderNutritionCoach(clientId){
 
 function renderNutritionClient(clientId){
   const con=document.getElementById('cn-nut-body');if(!con)return;
-  if(isFreeClient(DB.clients.find(x=>x.id===clientId))){con.innerHTML=premiumLockHTML('Plan nutricional','Calorías, macros y un plan de alimentación armado para ti.');return;}
   const nut=(DB.nutrition||{})[clientId];
   if(!nut||(!nut.kcal&&!nut.plan&&!nut.examples)){
     con.innerHTML='<div style="text-align:center;padding:20px 0;color:var(--t3)">Tu coach a\u00fan no ha cargado tu plan de alimentaci\u00f3n. Escr\u00edbele si quieres que lo incluya.</div>';
@@ -7451,7 +7369,6 @@ function renderMedidasClient(clientId){
   const listEl=document.getElementById('cn-med-list');
   const chartWrap=document.getElementById('cn-med-chart-wrap');
   if(!listEl)return;
-  if(isFreeClient(DB.clients.find(x=>x.id===clientId))){listEl.innerHTML=premiumLockHTML('Medidas corporales','Registra cintura, cadera y más, y míralas evolucionar.');if(chartWrap)chartWrap.style.display='none';return;}
   const entries=(DB.medidas||{})[clientId]||[];
   if(!entries.length){
     listEl.innerHTML='Sin medidas registradas. Toca "+ Registrar" para empezar.';
@@ -7636,7 +7553,6 @@ function savePhoto(){
 
 function renderPhotosClient(clientId){
   const con=document.getElementById('cn-photos-grid');if(!con)return;
-  if(isFreeClient(DB.clients.find(x=>x.id===clientId))){con.innerHTML=premiumLockHTML('Fotos de progreso','Guarda tu antes/después y compara tu transformación.');return;}
   const photos=(DB.photos||{})[clientId]||[];
   if(!photos.length){
     con.innerHTML='<div style="color:var(--t3);font-size:13px;text-align:center;padding:12px 0">A\u00fan no has subido fotos.</div>';return;
@@ -9686,33 +9602,6 @@ function whatsappNudge(id){
       <div class="wf-feeling-lbl" id="wf-feeling-lbl"></div>
     </div>
     <button class="wf-btn" onclick="closeWorkoutFinish()">Continuar →</button>
-  </div>
-</div>
-
-<!-- UPSELL PREMIUM "Quiero un coach" (momento full-bleed, solo modo libre) -->
-<div id="premium-upsell">
-  <div class="wf-photo" id="pu-photo"></div>
-  <div class="wf-inner">
-    <div id="pu-sell" style="width:100%;display:flex;flex-direction:column;align-items:center">
-      <div class="wf-eyebrow gold">⭐ <span data-gym-name>AVI</span> Premium</div>
-      <div class="wf-title">Un coach real, contigo</div>
-      <div class="wf-sub">Deja de entrenar solo. Un entrenador de verdad te lleva de la mano.</div>
-      <div class="pu-bens">
-        <div class="pu-ben"><span class="pu-ben-ico">🎯</span><span class="pu-ben-tx"><b>Plan hecho para ti</b> — tu coach lo ajusta a tu cuerpo y tu objetivo</span></div>
-        <div class="pu-ben"><span class="pu-ben-ico">🛡️</span><span class="pu-ben-tx"><b>Técnica corregida</b> — entrena seguro y progresa más rápido</span></div>
-        <div class="pu-ben"><span class="pu-ben-ico">💬</span><span class="pu-ben-tx"><b>Chat directo</b> — te responde una persona, no un bot</span></div>
-        <div class="pu-ben"><span class="pu-ben-ico">📈</span><span class="pu-ben-tx"><b>Nutrición y seguimiento</b> — fotos, medidas y tu progreso con gráficas</span></div>
-      </div>
-      <button class="wf-btn" id="pu-cta" onclick="puConfirm()">Quiero mi coach →</button>
-      <button class="pu-skip" onclick="closePremiumUpsell()">Ahora no</button>
-    </div>
-    <div id="pu-sent" style="width:100%;display:none;flex-direction:column;align-items:center">
-      <div class="wf-trophy">🙌</div>
-      <div class="wf-eyebrow">Solicitud enviada</div>
-      <div class="wf-title">¡Tu coach ya lo sabe!</div>
-      <div class="pu-sentbox">Te va a contactar pronto para conocerte y armar tu plan. Mientras tanto, sigue entrenando — cada sesión cuenta. 💪</div>
-      <button class="wf-btn" onclick="closePremiumUpsell()">Entendido →</button>
-    </div>
   </div>
 </div>
 
