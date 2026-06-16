@@ -1657,7 +1657,7 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
     <div id="p-tienda" class="panel">
       <div class="ph">
         <div><div class="ph-eyebrow">Panel del dueño</div><div class="ptitle">Tienda</div><div class="psub">Productos, ventas e inventario</div></div>
-        <button class="btn bp" onclick="openAddProduct()">+ Producto</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn bg" onclick="openCharge()">🧾 Cargar a cuenta</button><button class="btn bp" onclick="openAddProduct()">+ Producto</button></div>
       </div>
       <div id="tienda-list"></div>
     </div>
@@ -4047,9 +4047,16 @@ function seedDemoGym(){
     {id:'st_demo_t1',name:'Andrés Gómez',role:'trainer'},
     {id:'st_demo_t2',name:'Laura Medina',role:'trainer'},
   ];
-  // ── Asesorados: 8 miembros repartidos (1 sin asignar a propósito) ──
+  // ── Datos aleatorios para poblar el gym ──
+  const FN=['María','Juan','Camila','Andrés','Sofía','Carlos','Valentina','Diego','Laura','Santiago','Daniela','Sebastián','Paula','Mateo','Carolina','Felipe','Isabella','David','Manuela','Nicolás','Sara','Samuel','Gabriela','Tomás','Mariana','Alejandro','Lucía','Salomé','Emanuel','Antonia','Martín','Juliana'];
+  const LN=['García','Rodríguez','Martínez','López','Gómez','Hernández','Pérez','González','Ramírez','Torres','Díaz','Vargas','Castro','Ruiz','Romero','Suárez','Rojas','Moreno','Muñoz','Valencia','Cárdenas','Quintero','Ospina','Restrepo','Giraldo','Mejía'];
+  const GOALS=['Perder grasa','Ganar músculo','Recomposición','Fuerza','Resistencia','Salud general'];
+  const LVL=['Principiante','Intermedio','Avanzado'];
+  const rnd=a=>a[Math.floor(Math.random()*a.length)];
+  const ced=()=>String(Math.floor(10000000+Math.random()*1000000000));
+  // ── 8 asesorados "ricos" (con rutina/historial/chat) ──
   const mk=(n,name,sex,age,goal,level,days,tr,payOpts)=>{
-    const c={id:'demo_c'+n,name,sex,age,goal,level,days,place:'gym',weight:sex==='F'?62+n:74+n,height:sex==='F'?162:174,activityFactor:1.55,phone:'',notes:'',trainerId:tr||null,createdAt:iso(now-45*DAY,10)};
+    const c={id:'demo_c'+n,name,cedula:ced(),sex,age,goal,level,days,place:'gym',weight:sex==='F'?62+n:74+n,height:sex==='F'?162:174,activityFactor:1.55,phone:'',notes:'',trainerId:tr||null,createdAt:iso(now-45*DAY,10)};
     if(payOpts!=='none'){
       const due=payOpts==='expiring'?now+5*DAY:now+20*DAY;
       c.payments=[{date:iso(now-10*DAY,10),dueDate:iso(due,10),amount:70000,note:'Mensualidad'}];
@@ -4066,8 +4073,17 @@ function seedDemoGym(){
     mk(7,'Jorge Salazar','M',23,'Ganar músculo','Principiante',3,'st_demo_own'),
     mk(8,'Carmen Díaz','F',50,'Salud general','Principiante',3,null,'none'),
   ];
-  // ── Rutinas reales con el generador de la casa ──
-  DB.clients.forEach(c=>{ try{ _autoGenerateWeek(c); }catch(e){ warn('demo rutina:',c.name,e&&e.message); } });
+  // ── 92 socios más para llenar el gym: demo_c9..58 LIBRES (entrenan solos, sin entrenador) + demo_c59..100 con entrenador ──
+  for(let i=9;i<=100;i++){
+    const libre=i<=58, sex=Math.random()<0.5?'M':'F';
+    const c={id:'demo_c'+i,name:rnd(FN)+' '+rnd(LN),cedula:ced(),sex,age:18+Math.floor(Math.random()*42),goal:rnd(GOALS),level:rnd(LVL),days:2+Math.floor(Math.random()*5),place:'gym',weight:(sex==='F'?54:66)+Math.floor(Math.random()*26),height:(sex==='F'?156:168)+Math.floor(Math.random()*16),activityFactor:1.55,phone:'',notes:'',trainerId:libre?null:rnd(['st_demo_t1','st_demo_t2','st_demo_own']),createdAt:iso(now-(20+Math.floor(Math.random()*320))*DAY,10)};
+    if(libre)c.selfReg=true;
+    const r=Math.random();
+    if(r>=0.15){ const off=r<0.30?-6:r<0.45?4:22; c.payments=[{date:iso(now-(off<0?40:10)*DAY,10),dueDate:iso(now+off*DAY,10),amount:70000,note:'Mensualidad'}]; }
+    DB.clients.push(c);
+  }
+  // ── Rutinas reales (solo los 8 ricos, para no demorar el seed) ──
+  DB.clients.slice(0,8).forEach(c=>{ try{ _autoGenerateWeek(c); }catch(e){ warn('demo rutina:',c.name,e&&e.message); } });
   // ── Historial: ~3 semanas de sesiones según los días de rutina de cada uno ──
   DB.history={};
   const DAYS=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
@@ -4099,13 +4115,28 @@ function seedDemoGym(){
   };
   // ── Tienda: productos + ventas del mes (demo) ──
   DB.products=[
-    {id:'pr_d1',name:'Agua 600ml',price:3000,stock:24},
-    {id:'pr_d2',name:'Gatorade',price:5000,stock:12},
-    {id:'pr_d3',name:'Proteína (vaso)',price:8000,stock:30},
-    {id:'pr_d4',name:'Barra energética',price:4500,stock:2},
+    {id:'pr_d1',name:'Agua 600ml',price:3000,stock:40},
+    {id:'pr_d2',name:'Gatorade',price:5000,stock:24},
+    {id:'pr_d3',name:'Powerade',price:5000,stock:18},
+    {id:'pr_d4',name:'Proteína (vaso)',price:8000,stock:30},
+    {id:'pr_d5',name:'Batido de proteína',price:12000,stock:15},
+    {id:'pr_d6',name:'Pre-entreno (shot)',price:9000,stock:10},
+    {id:'pr_d7',name:'Creatina (servicio)',price:4000,stock:25},
+    {id:'pr_d8',name:'BCAA (vaso)',price:6000,stock:14},
+    {id:'pr_d9',name:'Barra energética',price:4500,stock:3},
+    {id:'pr_d10',name:'Barra de proteína',price:7000,stock:20},
+    {id:'pr_d11',name:'Café',price:2500,stock:50},
+    {id:'pr_d12',name:'Gomitas',price:2000,stock:2},
+    {id:'pr_d13',name:'Snack proteico',price:5500,stock:16},
+    {id:'pr_d14',name:'Bebida hidratante',price:4000,stock:22},
   ];
   DB.sales=[];
-  for(let i=0;i<14;i++){ const pr=DB.products[i%DB.products.length],q=1+(i%2); DB.sales.push({id:'sl_demo'+i,productId:pr.id,name:pr.name,price:pr.price,qty:q,total:pr.price*q,date:iso(now-i*DAY,12)}); }
+  for(let i=0;i<28;i++){ const pr=DB.products[i%DB.products.length],q=1+(i%3); DB.sales.push({id:'sl_demo'+i,productId:pr.id,name:pr.name,price:pr.price,qty:q,total:pr.price*q,date:iso(now-(i%24)*DAY,12)}); }
+  // Algunos socios con cuenta abierta (consumos sin pagar) para mostrar "Cuentas abiertas"
+  [[10,'pr_d1',1],[10,'pr_d9',1],[23,'pr_d2',1],[41,'pr_d5',1],[41,'pr_d11',1],[67,'pr_d1',2]].forEach(([ci,pid,q])=>{
+    const c=DB.clients.find(x=>x.id==='demo_c'+ci),pr=DB.products.find(p=>p.id===pid);
+    if(c&&pr){ if(!c.tab)c.tab=[]; c.tab.push({id:'tb'+ci+pid,productId:pid,name:pr.name,price:pr.price,qty:q,date:iso(now,11)}); pr.stock-=q; }
+  });
   sv('ax_staff',DB.staff);sv('ax_c',DB.clients);sv('ax_hist',DB.history);sv('ax_m',DB.msgs);
   sv('ax_cn',_b64enc('Patricia Rojas'));
   log('AVI GYM demo: gym sembrado —',DB.staff.length,'staff,',DB.clients.length,'asesorados');
@@ -4828,6 +4859,12 @@ function renderTienda(){
       <div><div style="font-size:21px;font-weight:800;color:var(--gt)">${unitsMonth}</div><div style="font-size:11px;color:var(--t2)">unidades</div></div>
       <div><div style="font-size:21px;font-weight:800;color:var(--t1)">${prods.length}</div><div style="font-size:11px;color:var(--t2)">productos</div></div>
     </div></div>`);
+  // Cuentas abiertas (consumos cargados, sin pagar) — el socio paga al salir
+  const openTabs=(DB.clients||[]).filter(c=>c.tab&&c.tab.length);
+  if(openTabs.length){
+    const rowsT=openTabs.map(c=>{const tot=c.tab.reduce((a,t)=>a+t.price*t.qty,0),n=c.tab.reduce((a,t)=>a+t.qty,0);return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--br);border-radius:var(--rsm);margin-bottom:6px;background:var(--w)"><div style="min-width:0"><div style="font-weight:700;font-size:14px">${esc(c.name)}</div><div style="font-size:12px;color:var(--t2)">${n} ítem${n!==1?'s':''} · <b style="color:var(--t1)">$${tot.toLocaleString('es-CO')}</b></div></div><div style="flex-shrink:0;white-space:nowrap"><button class="btn bg bsm" onclick="openCharge('${esc(c.id)}')">+ Agregar</button> <button class="btn bp bsm" onclick="settleTab('${esc(c.id)}')">Cobrar</button></div></div>`;}).join('');
+    parts.push(`<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:800;color:var(--t2);letter-spacing:.3px;margin-bottom:8px">🧾 CUENTAS ABIERTAS (${openTabs.length})</div>${rowsT}</div>`);
+  }
   if(!prods.length){
     parts.push(`<div class="empty"><div class="eico">🥤</div><div class="etxt">Sin productos aún</div><div class="esub">Agrega bebidas o suplementos con "+ Producto"</div></div>`);
   } else {
@@ -4851,6 +4888,73 @@ function deleteProduct(id){const p=(DB.products||[]).find(x=>x.id===id);if(!p)re
 function openSell(id){const p=(DB.products||[]).find(x=>x.id===id);if(!p)return;if((p.stock||0)<=0){toast('⚠️ Sin stock de '+p.name);return;}_sellProductId=id;document.getElementById('sale-prod').textContent=p.name;document.getElementById('sale-stock').textContent='$'+Number(p.price).toLocaleString('es-CO')+' c/u · '+p.stock+' en stock';document.getElementById('sale-qty').value=1;document.getElementById('sale-err').style.display='none';updateSaleTotal();om('m-sale');}
 function updateSaleTotal(){const p=(DB.products||[]).find(x=>x.id===_sellProductId);if(!p)return;const qty=Math.max(1,parseInt(document.getElementById('sale-qty').value)||1);document.getElementById('sale-total').textContent='$'+(p.price*qty).toLocaleString('es-CO');}
 function confirmSell(){const p=(DB.products||[]).find(x=>x.id===_sellProductId);if(!p)return;const qty=parseInt(document.getElementById('sale-qty').value)||0;const err=document.getElementById('sale-err');if(qty<1){err.textContent='Cantidad inválida.';err.style.display='block';return;}if(qty>(p.stock||0)){err.textContent='Solo hay '+(p.stock||0)+' en stock.';err.style.display='block';return;}p.stock=(p.stock||0)-qty;if(!DB.sales)DB.sales=[];DB.sales.push({id:'sl'+uid(),productId:p.id,name:p.name,price:p.price,qty,total:p.price*qty,date:new Date().toISOString()});sv('ax_prod',DB.products);sv('ax_sales',DB.sales);cm('m-sale');renderTienda();toast(`🛒 Venta: ${p.name} ×${qty} · $${(p.price*qty).toLocaleString('es-CO')}`);}
+
+// ── Cuenta de consumo por socio (anota productos, paga al salir) ──
+let _chargeMemberId=null;
+function openCharge(prefId){
+  _chargeMemberId=null;
+  document.getElementById('charge-search').value='';
+  document.getElementById('charge-results').innerHTML='';
+  document.getElementById('charge-selected').style.display='none';
+  document.getElementById('charge-prod').innerHTML=(DB.products||[]).map(p=>`<option value="${esc(p.id)}">${esc(p.name)} · $${Number(p.price).toLocaleString('es-CO')}${(p.stock||0)<=0?' (sin stock)':''}</option>`).join('');
+  om('m-charge');
+  if(prefId) selectChargeMember(prefId); else chargeSearch('');
+}
+function chargeSearch(q){
+  const term=(q||'').toLowerCase().trim(),res=document.getElementById('charge-results');
+  let list=(DB.clients||[]);
+  if(term) list=list.filter(c=>(`${c.name} ${c.cedula||''}`).toLowerCase().includes(term));
+  list=list.slice(0,8);
+  res.innerHTML=list.length?list.map(c=>`<div onclick="selectChargeMember('${esc(c.id)}')" style="padding:9px 10px;border-bottom:1px solid var(--br);cursor:pointer;font-size:13px"><b>${esc(c.name)}</b> <span style="color:var(--t3);font-family:monospace">${esc(c.cedula||'sin cédula')}</span></div>`).join(''):'<div style="padding:8px;color:var(--t3);font-size:12px">Sin resultados</div>';
+}
+function selectChargeMember(id){
+  const c=(DB.clients||[]).find(x=>x.id===id);if(!c)return;
+  _chargeMemberId=id;
+  document.getElementById('charge-results').innerHTML='';
+  document.getElementById('charge-search').value=c.name;
+  document.getElementById('charge-member').textContent=c.name+(c.cedula?' · '+c.cedula:'');
+  document.getElementById('charge-selected').style.display='block';
+  renderChargeTab();
+}
+function addToTab(){
+  const c=(DB.clients||[]).find(x=>x.id===_chargeMemberId);if(!c){toast('Elige un socio');return;}
+  const p=(DB.products||[]).find(x=>x.id===document.getElementById('charge-prod').value);if(!p){toast('Elige un producto');return;}
+  const qty=Math.max(1,parseInt(document.getElementById('charge-qty').value)||1);
+  if(qty>(p.stock||0)){toast(`⚠️ Solo hay ${p.stock||0} de ${p.name}`);return;}
+  p.stock-=qty;
+  if(!c.tab)c.tab=[];
+  c.tab.push({id:'tb'+uid(),productId:p.id,name:p.name,price:p.price,qty,date:new Date().toISOString()});
+  sv('ax_prod',DB.products);sv('ax_c',DB.clients);
+  document.getElementById('charge-qty').value=1;
+  renderChargeTab();renderTienda();
+  toast(`Anotado: ${p.name} ×${qty}`);
+}
+function renderChargeTab(){
+  const c=(DB.clients||[]).find(x=>x.id===_chargeMemberId),el=document.getElementById('charge-tab');if(!el)return;
+  const tab=(c&&c.tab)||[];
+  if(!tab.length){el.innerHTML='<div style="color:var(--t3);font-size:12px;padding:4px 0">Sin consumos aún</div>';return;}
+  const tot=tab.reduce((a,t)=>a+t.price*t.qty,0);
+  el.innerHTML=tab.map(t=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--br);font-size:13px"><span>${esc(t.name)} ×${t.qty}</span><span><b>$${(t.price*t.qty).toLocaleString('es-CO')}</b> <span onclick="removeTabItem('${esc(c.id)}','${esc(t.id)}')" style="color:var(--rd);cursor:pointer;margin-left:8px" title="Quitar">✕</span></span></div>`).join('')+`<div style="text-align:right;font-weight:800;margin-top:8px">Total cuenta: $${tot.toLocaleString('es-CO')}</div>`;
+}
+function removeTabItem(memberId,itemId){
+  const c=(DB.clients||[]).find(x=>x.id===memberId);if(!c||!c.tab)return;
+  const it=c.tab.find(t=>t.id===itemId);if(!it)return;
+  const p=(DB.products||[]).find(x=>x.id===it.productId);if(p)p.stock=(p.stock||0)+it.qty; // devolver stock
+  c.tab=c.tab.filter(t=>t.id!==itemId);
+  sv('ax_prod',DB.products);sv('ax_c',DB.clients);
+  renderChargeTab();renderTienda();
+}
+function settleTab(memberId){
+  const c=(DB.clients||[]).find(x=>x.id===memberId);if(!c||!c.tab||!c.tab.length)return;
+  const tot=c.tab.reduce((a,t)=>a+t.price*t.qty,0);
+  if(!confirm(`¿Cobrar la cuenta de ${c.name} por $${tot.toLocaleString('es-CO')}?`))return;
+  if(!DB.sales)DB.sales=[];
+  c.tab.forEach(t=>DB.sales.push({id:'sl'+uid(),productId:t.productId,name:t.name,price:t.price,qty:t.qty,total:t.price*t.qty,date:new Date().toISOString(),clientId:c.id}));
+  c.tab=[];
+  sv('ax_sales',DB.sales);sv('ax_c',DB.clients);
+  renderTienda();
+  toast(`✅ Cuenta de ${c.name} cobrada: $${tot.toLocaleString('es-CO')}`);
+}
 
 function _fillTrainerSelect(selectedId){
   const wrap=document.getElementById("cf-trainer-wrap"),sel=document.getElementById("cf-trainer");
@@ -9790,6 +9894,22 @@ function whatsappNudge(id){
     <div style="font-size:15px;font-weight:800;margin:6px 0 4px">Total: <span id="sale-total" style="color:var(--g)">$0</span></div>
     <div id="sale-err" style="display:none;color:#c0392b;font-size:12px;margin-bottom:8px"></div>
     <div class="mdfooter"><button class="btn bg" onclick="cm('m-sale')">Cancelar</button><button class="btn bp" onclick="confirmSell()">Registrar venta</button></div>
+  </div>
+</div>
+
+<!-- Tienda: cargar consumo a la cuenta de un socio -->
+<div class="mdbg" id="m-charge">
+  <div class="md">
+    <div class="mdtitle">🧾 Cargar consumo a cuenta</div>
+    <div class="fg"><label class="ilbl">Socio (nombre o cédula)</label><input class="inp" id="charge-search" placeholder="Escribe nombre o cédula..." oninput="chargeSearch(this.value)" autocomplete="off"></div>
+    <div id="charge-results" style="max-height:150px;overflow:auto"></div>
+    <div id="charge-selected" style="display:none;margin-top:6px">
+      <div style="font-size:15px;font-weight:800;color:var(--t1);margin-bottom:8px" id="charge-member"></div>
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px"><div class="fg" style="flex:1;margin:0"><label class="ilbl">Producto</label><select class="sel" id="charge-prod"></select></div><div class="fg" style="width:78px;margin:0"><label class="ilbl">Cant.</label><input class="inp" id="charge-qty" type="number" min="1" value="1"></div></div>
+      <button class="btn bp bsm" onclick="addToTab()" style="margin-bottom:12px">+ Agregar a la cuenta</button>
+      <div id="charge-tab"></div>
+    </div>
+    <div class="mdfooter"><button class="btn bp" onclick="cm('m-charge');renderTienda()">Listo</button></div>
   </div>
 </div>
 
