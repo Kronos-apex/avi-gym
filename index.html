@@ -4790,6 +4790,25 @@ function showPlanReveal(client, onContinue){
   }catch(e){ warn('AVI: showPlanReveal falló:',e&&e.message); if(typeof onContinue==='function'){try{onContinue();}catch(_){}} }
 }
 
+// Gate B2B para usuario NUEVO que entra por Google (OAuth no pasa por el trigger server-side
+// ni por checkGymCode del wizard si vino por "Continuar con Google" desde el login). Devuelve
+// true si: el gym no exige código, o trae uno válido (meta del signUp por email, o pending del
+// wizard-Google), o el usuario lo escribe correctamente ahora. false = no autorizado → no se crea.
+async function _ensureGymCodeForNewUser(authUser){
+  if(!(typeof gymCodeRequired==='function' && gymCodeRequired(window.GYM_CONFIG))) return true;
+  const m=(authUser&&authUser.user_metadata)||{};
+  if(checkGymCode(m.gymCode||'',window.GYM_CONFIG).ok) return true;        // email signup (meta)
+  try{ const p=_pendingWizard(); if(p&&checkGymCode(p.gymCode||'',window.GYM_CONFIG).ok) return true; }catch(e){} // wizard-Google
+  // Caso típico: "Continuar con Google" desde el login sin haber pasado el wizard → pedir el código.
+  let tries=2;
+  while(tries-->0){
+    const entered=prompt('Para activar tu cuenta, ingresa el código de tu gimnasio:');
+    if(entered===null) return false;                                       // canceló
+    if(checkGymCode(entered,window.GYM_CONFIG).ok) return true;
+  }
+  return false;
+}
+
 // Entra a la app en modo auth para un usuario con sesión Supabase. Carga su fila (o la
 // provisiona si es su 1er ingreso). Por ahora todos los auth users son asesorados libres;
 // el rol coach se conecta en 2.2e.
@@ -4807,6 +4826,16 @@ async function _enterAuthSession(authUser){
       medidas:row.medidas, nutrition:row.nutrition, photos:row.photos, msgs:row.msgs,
     });
   } else {
+    // Usuario NUEVO: backstop del código de gym para la ruta de Google (el email ya pasó el
+    // gate client+server). Sin código válido → no se crea la cuenta y se cierra la sesión.
+    if(!(await _ensureGymCodeForNewUser(authUser))){
+      try{ await AUTH.signOut(); }catch(e){}
+      AUTH_MODE=false;
+      try{localStorage.removeItem('ax_wz_pending');}catch(e){}
+      showScreen('s-login');
+      toast('Necesitas el código de tu gimnasio para crear la cuenta.');
+      return;
+    }
     client=await _provisionFreeClient(authUser,_profileFromMeta(authUser));
   }
   try{localStorage.removeItem('ax_wz_pending');}catch(e){} // ya consumido (o usuario existente)
@@ -5018,6 +5047,7 @@ function wzGoogle(){
       name, goal:g('su-goal')||null, place:g('su-place')||'gym', level:g('su-level')||'Principiante',
       days:parseInt(g('su-days'))||3, sex:g('su-sex')||null,
       age:parseInt(g('su-age'))||null, weight:parseFloat(g('su-weight'))||null, height:parseFloat(g('su-height'))||null,
+      gymCode:g('su-code')||'', // código ya validado en el wizard → evita re-preguntar al volver de Google
       ts:Date.now()
     }));
   }catch(e){}
