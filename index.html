@@ -828,11 +828,29 @@ html[data-theme="light"] .mta {
   #app{max-width:480px;margin:0 auto;height:100vh;position:relative;box-shadow:0 0 60px rgba(0,0,0,.5)}
 }
 
-/* Desktop (1024px+) */
+/* Desktop (1024px+) — login y vista de SOCIO siguen como app (marco teléfono) */
 @media(min-width:1024px){
   body{background:#111;display:flex;align-items:center;justify-content:center}
   #app{width:430px;height:90vh;max-height:900px;border-radius:24px;overflow:hidden;position:relative;box-shadow:0 8px 60px rgba(0,0,0,.6)}
   .screens{border-radius:24px}
+}
+
+/* Desktop — VISTA DEL DUEÑO/COACH a pantalla completa de escritorio.
+   Se activa con body.coach-view (showScreen lo pone al entrar a s-coach).
+   El sidebar (drawer en móvil) queda fijo a la izquierda; el bottom-nav y el ☰
+   se ocultan; el contenido se ensancha. Móvil y vista de socio: intactos. */
+@media(min-width:1024px){
+  body.coach-view{display:block;background:var(--bg)}
+  body.coach-view #app{width:100%;height:100vh;max-height:none;border-radius:0;box-shadow:none}
+  body.coach-view .screens{border-radius:0}
+  body.coach-view #s-coach .sidebar{left:0;width:236px;transition:none;box-shadow:none}
+  body.coach-view #s-coach .drawer-overlay{display:none!important}
+  body.coach-view #s-coach .coach-topbar,
+  body.coach-view #s-coach .main,
+  body.coach-view #s-coach .coach-bottom-nav{margin-left:236px}
+  body.coach-view #s-coach .coach-bottom-nav{display:none}
+  body.coach-view #s-coach .coach-topbar .menu-btn{display:none}
+  body.coach-view #s-coach .main .panel{max-width:1080px;margin:0 auto;padding:26px 34px}
 }
 
 /* Accesibilidad: respetar preferencia de reducir movimiento */
@@ -3399,7 +3417,7 @@ async function saveSettings(){
   document.getElementById('sb-nm').textContent=name;
   cm('m-settings');toast('✅ Configuración guardada');
 }
-function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));document.getElementById(id).classList.add('on')}
+function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));document.getElementById(id).classList.add('on');document.body.classList.toggle('coach-view',id==='s-coach')}
 
 // ══════════ TEMPLATES + EXERCISE PROGRESS ══════════
 function renderTemplates(){
