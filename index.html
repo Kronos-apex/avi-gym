@@ -4190,13 +4190,33 @@ function renderTeam(){
     return;
   }
   const counts=staffCounts(DB.clients,DB.staff);
+  // Pantalla del dueño: facturación + estado del gym y por entrenador (solo la dueña/admin
+  // ve la plata; un entrenador "viendo como" no ve los números de los demás).
+  const rev=staffRevenue(DB.clients,DB.staff);
+  const owner=(typeof isOwnerView==='function')?isOwnerView():true;
+  const money=n=>'$'+Math.round(n||0).toLocaleString('es-CO');
   list.innerHTML='';
+  if(owner){
+    const t=rev._total;
+    const strip=document.createElement('div');
+    strip.style.cssText='background:var(--gl);border:1px solid var(--g);border-radius:var(--r);padding:14px 16px;margin-bottom:14px';
+    strip.innerHTML=`<div style="font-size:12px;color:var(--t2);font-weight:800;letter-spacing:.3px;margin-bottom:10px">📊 RESUMEN DEL GYM · ESTE MES</div>
+      <div style="display:flex;gap:20px;flex-wrap:wrap">
+        <div><div style="font-size:21px;font-weight:800;color:var(--t1)">${money(t.revenue)}</div><div style="font-size:11px;color:var(--t2)">ingresos del mes</div></div>
+        <div><div style="font-size:21px;font-weight:800;color:var(--gt)">${t.alDia}</div><div style="font-size:11px;color:var(--t2)">al día</div></div>
+        <div><div style="font-size:21px;font-weight:800;color:var(--rd)">${t.vencidos}</div><div style="font-size:11px;color:var(--t2)">vencidos</div></div>
+        <div><div style="font-size:21px;font-weight:800;color:var(--t1)">${t.members}</div><div style="font-size:11px;color:var(--t2)">socios</div></div>
+      </div>`;
+    list.appendChild(strip);
+  }
   DB.staff.forEach(s=>{
     const n=counts[s.id]||0;
+    const r=rev[s.id]||{revenue:0,alDia:0,vencidos:0};
+    const revLine=owner?`<div class="cm" style="margin-top:3px">💰 ${money(r.revenue)} este mes · <span style="color:var(--gt)">🟢 ${r.alDia} al día</span> · <span style="color:var(--rd)">🔴 ${r.vencidos} vencidos</span></div>`:'';
     const d=document.createElement('div');d.className='cli';
     d.innerHTML=`<div class="cav" style="background:${avc(s.name)}">${esc(ini(s.name))}</div>
       <div style="flex:1;min-width:0"><div class="cn">${esc(s.name)} ${s.role==='owner'?'<span class="tag" style="background:var(--yll);color:#7a5c00;margin-left:4px">👑 Dueña/Admin</span>':''}</div>
-      <div class="cm">${n} asesorado${n!==1?'s':''}${s.role==='owner'?' · ve todo el gym':''}</div></div>
+      <div class="cm">${n} asesorado${n!==1?'s':''}${s.role==='owner'?' · ve todo el gym':''}</div>${revLine}</div>
       <button class="btn bg bsm" onclick="event.stopPropagation();setStaffView('${esc(s.id)}')">Ver como</button>
       <button class="btn bg bsm" style="margin-left:6px" onclick="event.stopPropagation();openEditTrainer('${esc(s.id)}')">Editar</button>
       <button class="btn bg bsm" style="margin-left:6px;color:var(--rd)" onclick="event.stopPropagation();deleteTrainer('${esc(s.id)}')">🗑️</button>`;
@@ -4289,16 +4309,8 @@ function setBottomNav(el){
 
 // ══════════════════════ MEMBRESÍA ══════════════════════
 const MS={
-  getStatus(c){
-    if(c.suspended)return 'inactive';
-    const pays=c.payments||[];
-    if(!pays.length)return 'pending';
-    const last=pays.reduce((a,b)=>new Date(a.dueDate)>new Date(b.dueDate)?a:b);
-    const daysLeft=Math.ceil((new Date(last.dueDate)-Date.now())/86400000);
-    if(daysLeft<0)return 'overdue';
-    if(daysLeft<=7)return 'expiring';
-    return 'active';
-  },
+  // Lógica única en avi-core (memberStatus) para que sea testeable y no se duplique.
+  getStatus(c){ return memberStatus(c); },
   // pending = asesorado nuevo aún sin pago → SÍ entra (onboarding + tier libre).
   // overdue (plan que venció) e inactive (suspendido) siguen bloqueados.
   canLogin(c){const s=this.getStatus(c);return s==='active'||s==='expiring'||s==='pending';},

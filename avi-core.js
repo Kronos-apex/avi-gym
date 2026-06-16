@@ -816,6 +816,51 @@ function staffById(staff, id) {
   return (staff || []).find(s => s && s.id === id) || null;
 }
 
+// Estado de membresía de un socio (espejo PURO de MS.getStatus, para testear).
+// 'inactive' suspendido · 'pending' sin pagos · 'overdue' venció · 'expiring' <=7d · 'active'.
+function memberStatus(c, now) {
+  now = now || Date.now();
+  if (!c || c.suspended) return 'inactive';
+  const pays = c.payments || [];
+  if (!pays.length) return 'pending';
+  const last = pays.reduce((a, b) => new Date(a.dueDate) > new Date(b.dueDate) ? a : b);
+  const daysLeft = Math.ceil((new Date(last.dueDate) - now) / 86400000);
+  if (daysLeft < 0) return 'overdue';
+  if (daysLeft <= 7) return 'expiring';
+  return 'active';
+}
+
+// Roll-up por entrenador para la pantalla del dueño: socios, ingresos DEL MES y
+// estado (al día / vencidos). Puro y testeable. opts={year,month,now} (default = hoy).
+// Devuelve {<staffId>:{members,revenue,alDia,vencidos}, _unassigned:{...}, _total:{...}}.
+// Los socios con trainerId huérfano o sin asignar caen en _unassigned.
+function staffRevenue(clients, staff, opts) {
+  opts = opts || {};
+  const now = opts.now || Date.now();
+  const ref = new Date(now);
+  const year = opts.year != null ? opts.year : ref.getFullYear();
+  const month = opts.month != null ? opts.month : ref.getMonth();
+  const blank = () => ({ members: 0, revenue: 0, alDia: 0, vencidos: 0 });
+  const out = { _unassigned: blank(), _total: blank() };
+  (staff || []).forEach(s => { if (s && s.id) out[s.id] = blank(); });
+  (clients || []).forEach(c => {
+    if (!c) return;
+    const key = (c.trainerId && out[c.trainerId]) ? c.trainerId : '_unassigned';
+    const b = out[key];
+    b.members++; out._total.members++;
+    let rev = 0;
+    (c.payments || []).forEach(p => {
+      const pd = new Date(p && p.date);
+      if (pd.getFullYear() === year && pd.getMonth() === month) rev += (parseFloat(p && p.amount) || 0);
+    });
+    b.revenue += rev; out._total.revenue += rev;
+    const st = memberStatus(c, now);
+    if (st === 'active' || st === 'expiring') { b.alDia++; out._total.alDia++; }
+    else if (st === 'overdue') { b.vencidos++; out._total.vencidos++; }
+  });
+  return out;
+}
+
 // Valida un perfil de equipo antes de guardar. Devuelve null si está bien
 // o el mensaje de error. El nombre no puede repetirse (ignorando may/min).
 function validateStaff(staff, name, role, editId) {
@@ -958,6 +1003,8 @@ if (typeof module !== 'undefined' && module.exports) {
     staffCounts,
     unassignTrainer,
     staffById,
+    memberStatus,
+    staffRevenue,
     validateStaff,
     getIccLabel,
     getSexCode,
