@@ -2533,11 +2533,13 @@ function setTheme(mode){
 const _sbDebounce = {};
 const _pendingPush = {}; // clave -> último valor AÚN NO confirmado en la nube (reintentable)
 function sv(k,v){
-  // Modo auth: las claves por-usuario van a SU fila user_data (no a localStorage global
-  // ni al blob legacy) → evita contaminar la nube/caché legacy. Debounce 800ms.
-  if(AUTH_MODE&&SB_KEYS.includes(k)){ _persistAuthUserDebounced(k,v); return; }
-  // Guardar en localStorage inmediatamente (nunca pierde datos)
+  // LOCAL-FIRST: guarda en localStorage AL INSTANTE, SIEMPRE (incluido modo auth).
+  // Para un POS las ventas/cuentas no pueden depender del internet: si no hay red,
+  // igual quedan guardadas y la nube se sincroniza después. (avigym.com = origen propio,
+  // sin colisión de localStorage con AVI personal.)
   try{localStorage.setItem(k,JSON.stringify(v));}catch(e){warn('localStorage full:',e);}
+  // Modo auth: además sincroniza la porción del usuario a su fila user_data (en 2º plano).
+  if(AUTH_MODE&&SB_KEYS.includes(k)){ _persistAuthUserDebounced(k,v); return; }
   // Enviar a Supabase con debounce de 1.5s (excepto operaciones críticas)
   if(SB_KEYS.includes(k)){
     _pendingPush[k]=v;
@@ -2547,10 +2549,16 @@ function sv(k,v){
 }
 // Forzar sync inmediato (para logout, completar entrenamiento, etc.)
 function svNow(k,v){
+  try{localStorage.setItem(k,JSON.stringify(v));}catch(e){warn('localStorage full:',e);} // local-first siempre
   if(AUTH_MODE&&SB_KEYS.includes(k)){ _persistAuthUser(k,v); return; }
-  try{localStorage.setItem(k,JSON.stringify(v));}catch(e){warn('localStorage full:',e);}
   if(SB_KEYS.includes(k)){_pendingPush[k]=v;clearTimeout(_sbDebounce[k]);sbSet(k,v);}
 }
+// Cuando vuelve la conexión, re-sincroniza lo que pudo no subir offline (tienda + clientes).
+window.addEventListener('online',()=>{
+  if(!AUTH_MODE)return;
+  try{ _persistAuthUser('ax_prod',DB.products); _persistAuthUser('ax_sales',DB.sales); }catch(e){}
+  try{ if(AUTH_ROLE==='coach') _persistCoachWrite('ax_c',DB.clients); }catch(e){}
+});
 
 // ── Persistencia en modo auth: mapea cada clave ax_* a la columna de la fila del
 // usuario logueado y la guarda con UD.upsertOwn (RLS por JWT). Las colecciones del
