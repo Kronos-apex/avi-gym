@@ -1353,6 +1353,14 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
         </button>
         <div class="cin-hint">Cuando quieras, súmale un <b>coach real</b> que ajuste tu plan a ti. 💪</div>
       </div>
+
+      <!-- FINAL (modo perfil): usuario ya autenticado por Google → genera el plan con su perfil -->
+      <div class="wz-step" id="wz-s-finish">
+        <div class="wz-eyebrow">Listo · Tu plan</div>
+        <div class="wz-q">¡Todo listo para <b>empezar!</b></div>
+        <div class="wz-help">Con tus respuestas armamos tu rutina hecha con criterio. Puedes ajustarla cuando quieras desde <b>Rutinas</b>.</div>
+        <button class="cin-btn lbtn" style="margin-top:10px" onclick="finishGoogleProfile()">Generar mi plan →</button>
+      </div>
     </div>
   </div>
 </div>
@@ -4809,6 +4817,58 @@ async function _ensureGymCodeForNewUser(authUser){
   return false;
 }
 
+// ── Recoger el perfil de un usuario YA autenticado por Google que entró por "Iniciar sesión"
+//    (sin pasar por el wizard) ── Reusa el wizard en modo 'profile': código (si aplica) +
+//    objetivo/lugar/nivel/días/cuerpo + paso final. finishGoogleProfile() provisiona con ESOS
+//    datos reales (no defaults) y entra a la app. Evita la rutina genérica.
+let _profileAuthUser=null;
+function startProfileForAuthedUser(authUser){
+  _profileAuthUser=authUser;
+  const m=(authUser&&authUser.user_metadata)||{};
+  const nm=document.getElementById('su-name');
+  if(nm) nm.value=(m.name||m.full_name||((authUser&&authUser.email)||'').split('@')[0]||'').trim();
+  showScreen('s-login');
+  const cta=document.getElementById('cin-cta'); if(cta)cta.style.display='none';
+  const card=document.getElementById('cin-card'); if(card)card.style.display='none';
+  const sg=document.getElementById('cin-signup'); if(sg)sg.style.display='block';
+  WZ.open('profile');
+  const first=WZ.steps[0]==='wz-s-code'?document.getElementById('su-code'):null;
+  if(first)setTimeout(()=>first.focus(),60);
+}
+async function finishGoogleProfile(){
+  const au=_profileAuthUser; if(!au) return;
+  const g=id=>document.getElementById(id);
+  const data={
+    name:(g('su-name').value||'').trim()||'Crack',
+    goal:g('su-goal').value, place:g('su-place').value||'gym',
+    level:g('su-level').value||'Principiante', days:parseInt(g('su-days').value)||3,
+    sex:g('su-sex').value||null, age:parseInt(g('su-age').value)||null,
+    weight:parseFloat(g('su-weight').value)||null, height:parseFloat(g('su-height').value)||null,
+    _complete:true,
+  };
+  const btn=document.querySelector('#wz-s-finish button'); if(btn)btn.disabled=true;
+  try{
+    const client=await _provisionFreeClient(au,data);
+    _profileAuthUser=null;
+    try{localStorage.removeItem('ax_wz_pending');}catch(e){}
+    const sg=document.getElementById('cin-signup'); if(sg)sg.style.display='none';
+    CUR.loggedAs='client'; CUR.clientId=client.id;
+    showScreen('s-client'); initClientView(client); startMsgPolling();
+    if(client.routines&&client.routines.length) showPlanReveal(client);
+    toast('🎉 ¡Bienvenido a '+BRAND+'! Tu rutina ya está lista.');
+  } finally { if(btn)btn.disabled=false; }
+}
+// Cancelar la recogida de perfil (atrás en el 1er paso) = cerrar sesión y volver al login.
+async function _cancelProfileSignup(){
+  _profileAuthUser=null;
+  try{ await AUTH.signOut(); }catch(e){}
+  AUTH_MODE=false;
+  const sg=document.getElementById('cin-signup'); if(sg)sg.style.display='none';
+  const card=document.getElementById('cin-card'); if(card)card.style.display='none';
+  const cta=document.getElementById('cin-cta'); if(cta)cta.style.display='flex';
+  showScreen('s-login');
+}
+
 // Entra a la app en modo auth para un usuario con sesión Supabase. Carga su fila (o la
 // provisiona si es su 1er ingreso). Por ahora todos los auth users son asesorados libres;
 // el rol coach se conecta en 2.2e.
@@ -4826,8 +4886,16 @@ async function _enterAuthSession(authUser){
       medidas:row.medidas, nutrition:row.nutrition, photos:row.photos, msgs:row.msgs,
     });
   } else {
-    // Usuario NUEVO: backstop del código de gym para la ruta de Google (el email ya pasó el
-    // gate client+server). Sin código válido → no se crea la cuenta y se cierra la sesión.
+    const prof=_profileFromMeta(authUser);
+    if(!prof._complete){
+      // Usuario NUEVO por Google que NO pasó por el wizard (entró por "Iniciar sesión con
+      // Google" en vez de "Crear cuenta") → no tenemos su objetivo/nivel/etc. Recogemos su
+      // perfil (y el código del gym) en el wizard ANTES de generar el plan. No auto-generamos
+      // con defaults. finishGoogleProfile() termina la provisión y entra a la app.
+      return startProfileForAuthedUser(authUser);
+    }
+    // Perfil completo (registro por email, o Google desde el wizard): backstop del código de gym
+    // (el email ya pasó el gate client+server). Sin código válido → no se crea + cierra sesión.
     if(!(await _ensureGymCodeForNewUser(authUser))){
       try{ await AUTH.signOut(); }catch(e){}
       AUTH_MODE=false;
@@ -4836,7 +4904,7 @@ async function _enterAuthSession(authUser){
       toast('Necesitas el código de tu gimnasio para crear la cuenta.');
       return;
     }
-    client=await _provisionFreeClient(authUser,_profileFromMeta(authUser));
+    client=await _provisionFreeClient(authUser,prof);
   }
   try{localStorage.removeItem('ax_wz_pending');}catch(e){} // ya consumido (o usuario existente)
   CUR.loggedAs='client'; CUR.clientId=client.id;
@@ -4911,12 +4979,21 @@ const WZ={
   // Los 7 pasos del wizard; WZ.open() le antepone 'wz-s-code' si el gym exige código.
   baseSteps:['wz-s-name','wz-s-goal','wz-s-place','wz-s-level','wz-s-when','wz-s-body','wz-s-account'],
   steps:['wz-s-name','wz-s-goal','wz-s-place','wz-s-level','wz-s-when','wz-s-body','wz-s-account'],
+  mode:'signup',
   cur:0,
-  open(){
+  // mode 'signup' = auto-registro normal (email/Google desde el wizard).
+  // mode 'profile' = usuario YA autenticado por Google que entró por "Iniciar sesión" sin
+  //   pasar por el wizard → recoge SU perfil (sin nombre, ya lo trae Google; sin cuenta, ya
+  //   está logueado) y termina en 'wz-s-finish' (genera el plan). Ver startProfileForAuthedUser.
+  open(mode){
+    this.mode = (mode==='profile') ? 'profile' : 'signup';
     this.cur=0;
-    // gate B2B: si el gym activo define signupCode, el código es el primer paso
+    // gate B2B: si el gym activo define signupCode, el código es el primer paso (también en perfil)
     const gated = (typeof gymCodeRequired==='function') && gymCodeRequired(window.GYM_CONFIG);
-    this.steps = gated ? ['wz-s-code'].concat(this.baseSteps) : this.baseSteps.slice();
+    const codePrefix = gated ? ['wz-s-code'] : [];
+    this.steps = (this.mode==='profile')
+      ? codePrefix.concat(['wz-s-goal','wz-s-place','wz-s-level','wz-s-when','wz-s-body','wz-s-finish'])
+      : codePrefix.concat(this.baseSteps);
     // limpia selecciones previas y re-aplica el día por defecto (3)
     document.querySelectorAll('#cin-signup .wz-chip.on,#cin-signup .wz-gchip.on').forEach(c=>c.classList.remove('on'));
     const d3=document.getElementById('wz-day3'); if(d3)d3.classList.add('on');
@@ -4941,7 +5018,9 @@ const WZ={
     if(this.cur<this.steps.length-1){this.cur++;this._sync();}
   },
   back(){
-    if(this.cur===0){ // volver a la bienvenida (CTA)
+    if(this.cur===0){
+      if(this.mode==='profile'){ _cancelProfileSignup(); return; } // authed: cancelar = cerrar sesión
+      // volver a la bienvenida (CTA)
       document.getElementById('cin-signup').style.display='none';
       document.getElementById('cin-cta').style.display='flex';
       return;
