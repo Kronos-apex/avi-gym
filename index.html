@@ -1754,6 +1754,19 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
           </div>
         </div>
       </div>
+      <!-- Cuenta y privacidad -->
+      <div class="card" style="margin-bottom:12px">
+        <div class="ch"><div class="ctitle">Cuenta y privacidad</div></div>
+        <div class="cb" style="display:flex;flex-direction:column;gap:10px;padding-top:4px">
+          <div style="font-size:12px;color:var(--t3);line-height:1.5">
+            Eliminar tu cuenta borra de forma permanente tu perfil, rutinas, progreso, medidas y fotos. Esta acción no se puede deshacer.
+          </div>
+          <button class="btn bsm" onclick="openDeleteAccount()"
+            style="background:transparent;color:#c0392b;border:1.5px solid #e7b7b0;font-weight:700;align-self:flex-start;padding:8px 14px">
+            🗑️ Eliminar mi cuenta
+          </button>
+        </div>
+      </div>
     </div>
   </div>
   <div class="cntabs">
@@ -1767,6 +1780,28 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
 
 <!-- MODALS -->
 <!-- Add/Edit Client -->
+<!-- Eliminar cuenta -->
+<div class="mdbg" id="m-delacct">
+  <div class="md">
+    <div class="mdtitle">🗑️ Eliminar mi cuenta</div>
+    <div style="background:var(--yll);border:1.5px solid var(--yl);border-radius:var(--r);padding:12px 14px;font-size:13px;color:#7a5c00;margin-bottom:14px;line-height:1.6">
+      ⚠️ <strong>Esto es permanente.</strong> Se borrarán para siempre tu cuenta, perfil, rutinas, progreso, medidas y fotos. No se puede deshacer ni recuperar.
+    </div>
+    <div style="font-size:13px;color:var(--t2);margin-bottom:8px;line-height:1.5">
+      Para confirmar, escribe <strong>ELIMINAR</strong> en mayúsculas:
+    </div>
+    <input id="delacct-confirm" class="inp" type="text" autocomplete="off" placeholder="ELIMINAR"
+      oninput="document.getElementById('delacct-go').disabled = this.value.trim() !== 'ELIMINAR'"
+      style="width:100%;padding:10px 12px;margin-bottom:8px">
+    <div id="delacct-err" style="display:none;color:#c0392b;font-size:12px;margin-bottom:8px"></div>
+    <div class="mdfooter">
+      <button class="btn bg" onclick="cm('m-delacct')">Cancelar</button>
+      <button class="btn bsm" id="delacct-go" disabled onclick="confirmDeleteAccount()"
+        style="background:#c0392b;color:#fff;font-weight:700">Eliminar definitivamente</button>
+    </div>
+  </div>
+</div>
+
 <div class="mdbg" id="m-client">
   <div class="md">
     <div class="mdtitle" id="mc-title">Nuevo asesorado</div>
@@ -7183,6 +7218,41 @@ function openBackup(){
   }catch(e){}
   om('m-backup');
 }
+// ── Borrado de cuenta self-service (privacidad / requisito de tiendas) ──
+// Llama la Edge Function delete-account, que borra user_data + push_subscriptions
+// + auth.users con service role. Tras el OK, limpia el rastro local y recarga.
+function openDeleteAccount(){
+  if(!AUTH_MODE){ toast('Disponible solo con sesión iniciada'); return; }
+  if(AUTH_ROLE==='coach'){ toast('La cuenta del coach no se elimina desde aquí'); return; }
+  const i=document.getElementById('delacct-confirm'); if(i)i.value='';
+  const b=document.getElementById('delacct-go'); if(b)b.disabled=true;
+  const e=document.getElementById('delacct-err'); if(e)e.style.display='none';
+  om('m-delacct');
+}
+
+async function confirmDeleteAccount(){
+  const btn=document.getElementById('delacct-go');
+  const err=document.getElementById('delacct-err');
+  if(err)err.style.display='none';
+  const c=(typeof AUTH!=='undefined')?AUTH.client():null;
+  if(!c){ if(err){err.textContent='No hay conexión con el servidor. Intenta de nuevo.';err.style.display='block';} return; }
+  if(btn){ btn.disabled=true; btn.textContent='Eliminando…'; }
+  try{
+    const { data, error } = await c.functions.invoke('delete-account',{ body:{} });
+    if(error) throw new Error(error.message||'Error de red');
+    if(!data || !data.ok) throw new Error((data&&data.error)||'No se pudo eliminar');
+    // Éxito: cerrar sesión y borrar todo rastro local antes de recargar al login.
+    try{ await AUTH.signOut(); }catch(_e){}
+    try{ Object.keys(localStorage).forEach(k=>{ if(/^(ax_|avi_|avigym|apex)/.test(k)) localStorage.removeItem(k); }); }catch(_e){}
+    cm('m-delacct');
+    toast('Tu cuenta fue eliminada');
+    setTimeout(()=>{ location.reload(); }, 900);
+  }catch(e){
+    if(btn){ btn.disabled=false; btn.textContent='Eliminar definitivamente'; }
+    if(err){ err.textContent='No se pudo eliminar ('+((e&&e.message)||e)+'). Intenta de nuevo.'; err.style.display='block'; }
+  }
+}
+
 function om(id){document.getElementById(id).classList.add('on')}
 function cm(id){document.getElementById(id).classList.remove('on')}
 document.querySelectorAll('.mdbg').forEach(bg=>bg.addEventListener('click',e=>{if(e.target===bg)bg.classList.remove('on')}));
