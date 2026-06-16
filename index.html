@@ -851,20 +851,24 @@ html[data-theme="light"] .mta {
   body.coach-view #s-coach .coach-bottom-nav{display:none}
   body.coach-view #s-coach .coach-topbar .menu-btn{display:none}
   body.coach-view #s-coach .main .panel{max-width:1080px;margin:0 auto;padding:26px 34px}
-  /* Equipo: tabla en escritorio, tarjetas en móvil */
-  body.coach-view .team-cards{display:none}
-  body.coach-view .team-table{display:table;width:100%;border-collapse:collapse;font-size:14px;margin-top:2px;background:var(--w);border:1px solid var(--br);border-radius:var(--r);overflow:hidden}
-  body.coach-view .team-table th{text-align:left;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--t3);padding:11px 14px;background:var(--bg);border-bottom:1.5px solid var(--br)}
-  body.coach-view .team-table td{padding:12px 14px;border-bottom:1px solid var(--br);vertical-align:middle;color:var(--t1)}
-  body.coach-view .team-table tbody tr:last-child td{border-bottom:none}
-  body.coach-view .team-table tbody tr:hover{background:var(--bg)}
-  body.coach-view .team-table .tt-name{font-weight:600}
-  body.coach-view .team-table .tt-num{text-align:right;font-weight:700;white-space:nowrap}
-  body.coach-view .team-table .tt-act{text-align:right;white-space:nowrap;width:1%}
-  body.coach-view .team-table .cav-sm{width:28px;height:28px;font-size:11px;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-right:9px;border-radius:50%;color:#fff;font-weight:800}
+  /* Tablas de escritorio (Equipo / Asesorados): tabla en PC, tarjetas en móvil */
+  body.coach-view .team-cards,
+  body.coach-view .cli-cards{display:none}
+  body.coach-view .team-table,
+  body.coach-view .cli-table{display:table}
+  body.coach-view .dtable{width:100%;border-collapse:collapse;font-size:14px;margin-top:2px;background:var(--w);border:1px solid var(--br);border-radius:var(--r);overflow:hidden}
+  body.coach-view .dtable th{text-align:left;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--t3);padding:11px 14px;background:var(--bg);border-bottom:1.5px solid var(--br)}
+  body.coach-view .dtable td{padding:12px 14px;border-bottom:1px solid var(--br);vertical-align:middle;color:var(--t1)}
+  body.coach-view .dtable tbody tr:last-child td{border-bottom:none}
+  body.coach-view .dtable tbody tr:hover{background:var(--bg)}
+  body.coach-view .dtable tbody tr[onclick]{cursor:pointer}
+  body.coach-view .dtable .tt-name{font-weight:600}
+  body.coach-view .dtable .tt-num{text-align:right;font-weight:700;white-space:nowrap}
+  body.coach-view .dtable .tt-act{text-align:right;white-space:nowrap;width:1%}
+  body.coach-view .dtable .cav-sm{width:28px;height:28px;font-size:11px;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-right:9px;border-radius:50%;color:#fff;font-weight:800}
 }
-/* Tabla del equipo: oculta fuera de escritorio (en móvil mandan las tarjetas) */
-.team-table{display:none}
+/* Tablas de escritorio: ocultas fuera de PC (en móvil mandan las tarjetas) */
+.team-table,.cli-table{display:none}
 
 /* Accesibilidad: respetar preferencia de reducir movimiento */
 @media(prefers-reduced-motion:reduce){
@@ -4262,7 +4266,7 @@ function renderTeam(){
     return `<tr><td class="tt-name"><span class="cav cav-sm" style="background:${avc(s.name)}">${esc(ini(s.name))}</span>${esc(s.name)} ${adminTag(s)}</td>
       <td class="tt-num">${n}</td>${money3}<td class="tt-act">${acts(s)}</td></tr>`;
   }).join('');
-  parts.push(`<table class="team-table"><thead>${head}</thead><tbody>${rows}</tbody></table>`);
+  parts.push(`<table class="team-table dtable"><thead>${head}</thead><tbody>${rows}</tbody></table>`);
 
   // ── Aviso de sin asignar (ambas vistas) ──
   if(counts._unassigned>0){
@@ -4618,13 +4622,15 @@ function filterClients(q){
   const term=(q||'').toLowerCase().trim();
   const list=document.getElementById('cli-list');
   if(!list)return;
-  list.querySelectorAll('.cli').forEach(el=>{
-    const name=(el.querySelector('.cn')||{}).textContent||'';
-    const meta=(el.querySelector('.cm')||{}).textContent||'';
-    el.style.display=(!term||name.toLowerCase().includes(term)||meta.toLowerCase().includes(term))?'':'none';
+  // Filtra tarjetas (.cli, móvil) Y filas de tabla (.cli-row, escritorio) por data-search.
+  const seen=new Set();
+  list.querySelectorAll('.cli,.cli-row').forEach(el=>{
+    const match=!term||(el.dataset.search||'').includes(term);
+    el.style.display=match?'':'none';
+    if(match&&el.dataset.cid)seen.add(el.dataset.cid);
   });
-  const visible=list.querySelectorAll('.cli[style*="display: "]:not([style*="none"]),.cli:not([style])').length;
-  document.getElementById('cli-lbl').textContent=term?`${list.querySelectorAll('.cli:not([style*="none"])').length} resultado${list.querySelectorAll('.cli:not([style*="none"])').length!==1?'s':''} de ${DB.clients.length}`:`${DB.clients.length} asesorado${DB.clients.length!==1?'s':''} registrado${DB.clients.length!==1?'s':''}`;
+  const visible=seen.size;
+  document.getElementById('cli-lbl').textContent=term?`${visible} resultado${visible!==1?'s':''} de ${DB.clients.length}`:`${DB.clients.length} asesorado${DB.clients.length!==1?'s':''} registrado${DB.clients.length!==1?'s':''}`;
 }
 
 function miniSparkline(clientId){
@@ -4651,7 +4657,8 @@ function renderClients(){
   const searchEl=document.getElementById('cli-search');if(searchEl)searchEl.value='';
   document.getElementById('cli-lbl').textContent=`${clist.length} asesorado${clist.length!==1?'s':''} registrado${clist.length!==1?'s':''}`+(DB.staff.length&&!isOwnerView()?' · '+(activeStaff()||{}).name:'');
   if(!clist.length){list.innerHTML=`<div style="padding:20px 0"><div style="text-align:center;padding:8px 0 20px"><div style="width:56px;height:56px;border-radius:50%;background:var(--gl);display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 12px">👥</div><div style="font-size:17px;font-weight:800;color:var(--t1);margin-bottom:6px">Aún no hay asesorados</div><div style="font-size:13px;color:var(--t2);margin-bottom:18px;line-height:1.5">Crea tu primer cliente para comenzar<br>a gestionar rutinas y progreso.</div><button class="btn bp" onclick="openAddClient()" style="padding:12px 28px;font-size:14px">+ Nuevo asesorado</button></div>${[0,1,2].map(()=>`<div class="cli" style="pointer-events:none;opacity:.3"><div style="width:42px;height:42px;border-radius:50%;background:var(--br2);flex-shrink:0"></div><div style="flex:1;min-width:0"><div style="height:13px;width:55%;background:var(--br2);border-radius:6px;margin-bottom:7px"></div><div style="height:11px;width:80%;background:var(--br);border-radius:6px"></div></div><div style="width:54px;height:22px;background:var(--br2);border-radius:20px;flex-shrink:0"></div></div>`).join('')}</div>`;return}
-  list.innerHTML='';
+  const showTrainer=DB.staff.length&&(typeof isOwnerView==='function'?isOwnerView():true);
+  const cards=[],rows=[];
   clist.forEach(c=>{
     const ms=DB.msgs[c.id]||[];const last=ms[ms.length-1];
     // Rutina del día o mañana
@@ -4673,10 +4680,20 @@ function renderClients(){
     } else {
       routineStr=`<div style="font-size:11px;color:var(--t3);margin-top:3px">Sin rutinas asignadas</div>`;
     }
-    const d=document.createElement('div');d.className='cli';
-    d.innerHTML=`<div class="cav" style="background:${avc(c.name)}">${esc(ini(c.name))}</div><div style="flex:1;min-width:0"><div class="cn">${esc(c.name)}</div><div class="cm">${esc(c.goal||'')} · ${esc(c.level||'')} · ${esc(String(c.days||3))} días/sem</div>${routineStr}${last?`<div style="font-size:11px;color:var(--t3);margin-top:2px">💬 "${esc(last.text.slice(0,45))}${last.text.length>45?'...':''}"</div>`:''}</div><div style="text-align:right;flex-shrink:0">${miniSparkline(c.id)}<span class="tag ${c.level==='Principiante'?'tg':c.level==='Intermedio'?'tb':'to'}">${c.level||'—'}</span>${c.selfReg?(c.wantsCoach?'<span class="tag" style="background:var(--orl);color:var(--or);margin-left:4px">🙋 Quiere coach</span>':'<span class="tag" style="background:var(--bll);color:#1a4a7a;margin-left:4px">🆓 Libre</span>'):''}${_trChip(c)}<div style="font-size:11px;color:var(--t2);margin-top:4px">${(c.routines||[]).length} rutina${(c.routines||[]).length!==1?'s':''}</div></div><button class="btn bg bsm" style="margin-left:8px" onclick="event.stopPropagation();openDetail('${c.id}')">Ver →</button>`;
-    d.onclick=()=>openDetail(c.id);list.appendChild(d);
+    const _trN=trainerName(c.trainerId)||'';
+    const search=esc(`${c.name} ${c.goal||''} ${c.level||''} ${_trN}`.toLowerCase());
+    // ── Tarjeta (MÓVIL) ──
+    cards.push(`<div class="cli" data-cid="${esc(c.id)}" data-search="${search}" onclick="openDetail('${esc(c.id)}')"><div class="cav" style="background:${avc(c.name)}">${esc(ini(c.name))}</div><div style="flex:1;min-width:0"><div class="cn">${esc(c.name)}</div><div class="cm">${esc(c.goal||'')} · ${esc(c.level||'')} · ${esc(String(c.days||3))} días/sem</div>${routineStr}${last?`<div style="font-size:11px;color:var(--t3);margin-top:2px">💬 "${esc(last.text.slice(0,45))}${last.text.length>45?'...':''}"</div>`:''}</div><div style="text-align:right;flex-shrink:0">${miniSparkline(c.id)}<span class="tag ${c.level==='Principiante'?'tg':c.level==='Intermedio'?'tb':'to'}">${c.level||'—'}</span>${c.selfReg?(c.wantsCoach?'<span class="tag" style="background:var(--orl);color:var(--or);margin-left:4px">🙋 Quiere coach</span>':'<span class="tag" style="background:var(--bll);color:#1a4a7a;margin-left:4px">🆓 Libre</span>'):''}${_trChip(c)}<div style="font-size:11px;color:var(--t2);margin-top:4px">${(c.routines||[]).length} rutina${(c.routines||[]).length!==1?'s':''}</div></div><button class="btn bg bsm" style="margin-left:8px" onclick="event.stopPropagation();openDetail('${esc(c.id)}')">Ver →</button></div>`);
+    // ── Fila (ESCRITORIO) ──
+    const st=MS.getStatus(c),badge=MS.badge(st);
+    const pays=(c.payments||[]).slice().sort((a,b)=>new Date(b.dueDate)-new Date(a.dueDate));
+    const vence=pays[0]?new Date(pays[0].dueDate).toLocaleDateString('es-CO',{day:'2-digit',month:'short'}):'—';
+    const venceCol=st==='overdue'?'var(--rd)':st==='expiring'?'var(--or)':'var(--t2)';
+    const trCell=showTrainer?`<td>${_trN?esc(_trN):'<span style="color:var(--t3)">Sin asignar</span>'}</td>`:'';
+    rows.push(`<tr class="cli-row" data-cid="${esc(c.id)}" data-search="${search}" onclick="openDetail('${esc(c.id)}')"><td class="tt-name"><span class="cav cav-sm" style="background:${avc(c.name)}">${esc(ini(c.name))}</span>${esc(c.name)}</td><td>${esc(c.goal||'—')}</td>${trCell}<td><span style="background:${badge.bg};color:${badge.color};font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap">${badge.label}</span></td><td style="color:${venceCol};white-space:nowrap">${vence}</td><td class="tt-act"><button class="btn bg bsm" onclick="event.stopPropagation();openDetail('${esc(c.id)}')">Ver →</button></td></tr>`);
   });
+  const head=`<tr><th>Asesorado</th><th>Objetivo</th>${showTrainer?'<th>Entrenador</th>':''}<th>Estado</th><th>Vence</th><th class="tt-act"></th></tr>`;
+  list.innerHTML=`<div class="cli-cards">${cards.join('')}</div><table class="cli-table dtable"><thead>${head}</thead><tbody>${rows.join('')}</tbody></table>`;
 }
 
 function _fillTrainerSelect(selectedId){
