@@ -853,9 +853,11 @@ html[data-theme="light"] .mta {
   body.coach-view #s-coach .main .panel{max-width:1080px;margin:0 auto;padding:26px 34px}
   /* Tablas de escritorio (Equipo / Asesorados): tabla en PC, tarjetas en móvil */
   body.coach-view .team-cards,
-  body.coach-view .cli-cards{display:none}
+  body.coach-view .cli-cards,
+  body.coach-view .cobros-cards{display:none}
   body.coach-view .team-table,
-  body.coach-view .cli-table{display:table}
+  body.coach-view .cli-table,
+  body.coach-view .cobros-table{display:table}
   body.coach-view .dtable{width:100%;border-collapse:collapse;font-size:14px;margin-top:2px;background:var(--w);border:1px solid var(--br);border-radius:var(--r);overflow:hidden}
   body.coach-view .dtable th{text-align:left;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--t3);padding:11px 14px;background:var(--bg);border-bottom:1.5px solid var(--br)}
   body.coach-view .dtable td{padding:12px 14px;border-bottom:1px solid var(--br);vertical-align:middle;color:var(--t1)}
@@ -868,7 +870,7 @@ html[data-theme="light"] .mta {
   body.coach-view .dtable .cav-sm{width:28px;height:28px;font-size:11px;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-right:9px;border-radius:50%;color:#fff;font-weight:800}
 }
 /* Tablas de escritorio: ocultas fuera de PC (en móvil mandan las tarjetas) */
-.team-table,.cli-table{display:none}
+.team-table,.cli-table,.cobros-table{display:none}
 
 /* Accesibilidad: respetar preferencia de reducir movimiento */
 @media(prefers-reduced-motion:reduce){
@@ -1434,6 +1436,7 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
     <div class="sbi" onclick="gp('p-templates',this,'Plantillas')" id="sbi-templates"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3.5 7a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg></span>Plantillas</div>
     <div class="sbi" onclick="gp('p-msgs',this,'Mensajes')" id="sbi-msgs"><span class="ic"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.7 7.1L4 20.5l1.4-5.2A8 8 0 1 1 21 12z"/></svg></span>Mensajes<span class="bdg" id="sb-msgs-bdg" style="display:none">0</span></div>
     <div class="sbi" onclick="gp('p-team',this,'Equipo')" id="sbi-team"><span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="3"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/><path d="M12 12v3"/><path d="M9 15h6"/></svg></span>Equipo<span class="bdg" id="sb-team-bdg" style="display:none">0</span></div>
+    <div class="sbi" onclick="gp('p-cobros',this,'Cobros');renderCobros()" id="sbi-cobros"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 9.5h18"/><path d="M6.5 14.5h4"/></svg></span>Cobros</div>
     <div class="sbbot">
       <div class="sbuser">
         <div class="av" style="background:var(--g)" id="sb-av">C</div>
@@ -1635,6 +1638,13 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
         <button class="btn bp" onclick="openAddTrainer()">+ Entrenador</button>
       </div>
       <div id="team-list"></div>
+    </div>
+    <!-- COBROS -->
+    <div id="p-cobros" class="panel">
+      <div class="ph">
+        <div><div class="ph-eyebrow">Panel del dueño</div><div class="ptitle">Cobros</div><div class="psub">Pagos, vencimientos e ingresos del mes</div></div>
+      </div>
+      <div id="cobros-list"></div>
     </div>
   </div><!-- /main -->
 
@@ -4198,7 +4208,7 @@ function setStaffView(id){
   const s=activeStaff();
   toast(s?(s.role==='owner'?'👑 Vista de '+esc(s.name)+' (todo el gym)':'💪 Viendo como '+esc(s.name)):'Vista completa del gym');
 }
-function renderAll(){renderHome();renderClients();renderExercises();renderMsgs();renderTemplates();renderTeam();renderStaffUI();document.getElementById('bdg').textContent=visClients().length}
+function renderAll(){renderHome();renderClients();renderExercises();renderMsgs();renderTemplates();renderTeam();renderCobros();renderStaffUI();document.getElementById('bdg').textContent=visClients().length}
 
 // ── AVI GYM F2: UI del equipo ──
 // Selector "Viendo como" en el sidebar + identidad del perfil activo.
@@ -4694,6 +4704,57 @@ function renderClients(){
   });
   const head=`<tr><th>Asesorado</th><th>Objetivo</th>${showTrainer?'<th>Entrenador</th>':''}<th>Estado</th><th>Vence</th><th class="tt-act"></th></tr>`;
   list.innerHTML=`<div class="cli-cards">${cards.join('')}</div><table class="cli-table dtable"><thead>${head}</thead><tbody>${rows.join('')}</tbody></table>`;
+}
+
+// ── COBROS (pantalla del dueño): pagos por urgencia + resumen del mes ──
+function renderCobros(){
+  const list=document.getElementById('cobros-list');if(!list)return;
+  const _vc=visClients();
+  const owner=(typeof isOwnerView==='function')?isOwnerView():true;
+  const showTrainer=DB.staff.length&&owner;
+  const money=n=>'$'+Math.round(n||0).toLocaleString('es-CO');
+  if(!_vc.length){ list.innerHTML='<div class="empty"><div class="eico">💳</div><div class="etxt">Sin asesorados todavía</div><div class="esub">Cuando registres socios y pagos, aquí ves los cobros</div></div>'; return; }
+  // Resumen del mes + conteos por estado
+  const now=new Date(),y=now.getFullYear(),mo=now.getMonth();
+  let ingr=0,cExp=0,cVen=0,cPen=0;
+  _vc.forEach(c=>{
+    (c.payments||[]).forEach(p=>{const d=new Date(p.date);if(d.getFullYear()===y&&d.getMonth()===mo)ingr+=parseFloat(p.amount)||0;});
+    const st=MS.getStatus(c); if(st==='expiring')cExp++;else if(st==='overdue')cVen++;else if(st==='pending')cPen++;
+  });
+  const ord={'overdue':0,'expiring':1,'pending':2,'active':3,'inactive':4,'suspended':5};
+  const sorted=[..._vc].sort((a,b)=>(ord[MS.getStatus(a)]??9)-(ord[MS.getStatus(b)]??9));
+  const lastPay=c=>{const ps=(c.payments||[]).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));return ps[0]||null;};
+  const fdate=d=>d?new Date(d).toLocaleDateString('es-CO',{day:'2-digit',month:'short'}):'—';
+
+  const parts=[];
+  // Resumen
+  parts.push(`<div style="background:var(--gl);border:1px solid var(--g);border-radius:var(--r);padding:14px 16px;margin-bottom:14px">
+    <div style="font-size:12px;color:var(--t2);font-weight:800;letter-spacing:.3px;margin-bottom:10px">💰 COBROS · ESTE MES</div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap">
+      <div><div style="font-size:21px;font-weight:800;color:var(--t1)">${money(ingr)}</div><div style="font-size:11px;color:var(--t2)">ingresos del mes</div></div>
+      <div><div style="font-size:21px;font-weight:800;color:var(--or)">${cExp}</div><div style="font-size:11px;color:var(--t2)">por vencer</div></div>
+      <div><div style="font-size:21px;font-weight:800;color:var(--rd)">${cVen}</div><div style="font-size:11px;color:var(--t2)">vencidos</div></div>
+      <div><div style="font-size:21px;font-weight:800;color:var(--yl)">${cPen}</div><div style="font-size:11px;color:var(--t2)">sin pago</div></div>
+    </div></div>`);
+
+  const cards=[],rows=[];
+  sorted.forEach(c=>{
+    const st=MS.getStatus(c),badge=MS.badge(st),lp=lastPay(c),_trN=trainerName(c.trainerId)||'';
+    const monto=lp&&lp.amount?money(lp.amount):'—';
+    const vence=lp?fdate(lp.dueDate):'—', venceCol=st==='overdue'?'var(--rd)':st==='expiring'?'var(--or)':'var(--t2)';
+    const badgeHTML=`<span style="background:${badge.bg};color:${badge.color};font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap">${badge.label}</span>`;
+    const payBtn=`<button class="btn bp bsm" onclick="event.stopPropagation();openPaymentModal('${esc(c.id)}')">+ Pago</button>`;
+    // Tarjeta (móvil)
+    cards.push(`<div class="cli" data-cid="${esc(c.id)}" onclick="openDetail('${esc(c.id)}')"><div class="cav" style="background:${avc(c.name)}">${esc(ini(c.name))}</div>
+      <div style="flex:1;min-width:0"><div class="cn">${esc(c.name)} ${badgeHTML}</div>
+      <div class="cm">Vence ${vence} · ${monto}${showTrainer&&_trN?' · 🏋️ '+esc(_trN):''}</div></div>${payBtn}</div>`);
+    // Fila (escritorio)
+    rows.push(`<tr data-cid="${esc(c.id)}" onclick="openDetail('${esc(c.id)}')"><td class="tt-name"><span class="cav cav-sm" style="background:${avc(c.name)}">${esc(ini(c.name))}</span>${esc(c.name)}</td>${showTrainer?`<td>${_trN?esc(_trN):'<span style="color:var(--t3)">Sin asignar</span>'}</td>`:''}<td>${badgeHTML}</td><td style="white-space:nowrap">${fdate(lp&&lp.date)}</td><td style="color:${venceCol};white-space:nowrap">${vence}</td><td class="tt-num">${monto}</td><td class="tt-act">${payBtn}</td></tr>`);
+  });
+  parts.push(`<div class="cobros-cards">${cards.join('')}</div>`);
+  const head=`<tr><th>Socio</th>${showTrainer?'<th>Entrenador</th>':''}<th>Estado</th><th>Último pago</th><th>Vence</th><th class="tt-num">Monto</th><th class="tt-act"></th></tr>`;
+  parts.push(`<table class="cobros-table dtable"><thead>${head}</thead><tbody>${rows.join('')}</tbody></table>`);
+  list.innerHTML=parts.join('');
 }
 
 function _fillTrainerSelect(selectedId){
@@ -9432,6 +9493,7 @@ function registerPayment(){
   renderDetailMembership(id);
   renderClients();
   renderHome();
+  renderCobros();
   toast('Pago registrado correctamente');
 }
 
