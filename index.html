@@ -851,7 +851,20 @@ html[data-theme="light"] .mta {
   body.coach-view #s-coach .coach-bottom-nav{display:none}
   body.coach-view #s-coach .coach-topbar .menu-btn{display:none}
   body.coach-view #s-coach .main .panel{max-width:1080px;margin:0 auto;padding:26px 34px}
+  /* Equipo: tabla en escritorio, tarjetas en móvil */
+  body.coach-view .team-cards{display:none}
+  body.coach-view .team-table{display:table;width:100%;border-collapse:collapse;font-size:14px;margin-top:2px;background:var(--w);border:1px solid var(--br);border-radius:var(--r);overflow:hidden}
+  body.coach-view .team-table th{text-align:left;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--t3);padding:11px 14px;background:var(--bg);border-bottom:1.5px solid var(--br)}
+  body.coach-view .team-table td{padding:12px 14px;border-bottom:1px solid var(--br);vertical-align:middle;color:var(--t1)}
+  body.coach-view .team-table tbody tr:last-child td{border-bottom:none}
+  body.coach-view .team-table tbody tr:hover{background:var(--bg)}
+  body.coach-view .team-table .tt-name{font-weight:600}
+  body.coach-view .team-table .tt-num{text-align:right;font-weight:700;white-space:nowrap}
+  body.coach-view .team-table .tt-act{text-align:right;white-space:nowrap;width:1%}
+  body.coach-view .team-table .cav-sm{width:28px;height:28px;font-size:11px;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-right:9px;border-radius:50%;color:#fff;font-weight:800}
 }
+/* Tabla del equipo: oculta fuera de escritorio (en móvil mandan las tarjetas) */
+.team-table{display:none}
 
 /* Accesibilidad: respetar preferencia de reducir movimiento */
 @media(prefers-reduced-motion:reduce){
@@ -4213,39 +4226,49 @@ function renderTeam(){
   const rev=staffRevenue(DB.clients,DB.staff);
   const owner=(typeof isOwnerView==='function')?isOwnerView():true;
   const money=n=>'$'+Math.round(n||0).toLocaleString('es-CO');
-  list.innerHTML='';
+  const parts=[];
+  // ── Resumen del gym (solo dueña) — móvil y escritorio ──
   if(owner){
     const t=rev._total;
-    const strip=document.createElement('div');
-    strip.style.cssText='background:var(--gl);border:1px solid var(--g);border-radius:var(--r);padding:14px 16px;margin-bottom:14px';
-    strip.innerHTML=`<div style="font-size:12px;color:var(--t2);font-weight:800;letter-spacing:.3px;margin-bottom:10px">📊 RESUMEN DEL GYM · ESTE MES</div>
+    parts.push(`<div style="background:var(--gl);border:1px solid var(--g);border-radius:var(--r);padding:14px 16px;margin-bottom:14px">
+      <div style="font-size:12px;color:var(--t2);font-weight:800;letter-spacing:.3px;margin-bottom:10px">📊 RESUMEN DEL GYM · ESTE MES</div>
       <div style="display:flex;gap:20px;flex-wrap:wrap">
         <div><div style="font-size:21px;font-weight:800;color:var(--t1)">${money(t.revenue)}</div><div style="font-size:11px;color:var(--t2)">ingresos del mes</div></div>
         <div><div style="font-size:21px;font-weight:800;color:var(--gt)">${t.alDia}</div><div style="font-size:11px;color:var(--t2)">al día</div></div>
         <div><div style="font-size:21px;font-weight:800;color:var(--rd)">${t.vencidos}</div><div style="font-size:11px;color:var(--t2)">vencidos</div></div>
         <div><div style="font-size:21px;font-weight:800;color:var(--t1)">${t.members}</div><div style="font-size:11px;color:var(--t2)">socios</div></div>
-      </div>`;
-    list.appendChild(strip);
+      </div></div>`);
   }
-  DB.staff.forEach(s=>{
-    const n=counts[s.id]||0;
-    const r=rev[s.id]||{revenue:0,alDia:0,vencidos:0};
-    const revLine=owner?`<div class="cm" style="margin-top:3px">💰 ${money(r.revenue)} este mes · <span style="color:var(--gt)">🟢 ${r.alDia} al día</span> · <span style="color:var(--rd)">🔴 ${r.vencidos} vencidos</span></div>`:'';
-    const d=document.createElement('div');d.className='cli';
-    d.innerHTML=`<div class="cav" style="background:${avc(s.name)}">${esc(ini(s.name))}</div>
-      <div style="flex:1;min-width:0"><div class="cn">${esc(s.name)} ${s.role==='owner'?'<span class="tag" style="background:var(--yll);color:#7a5c00;margin-left:4px">👑 Dueña/Admin</span>':''}</div>
-      <div class="cm">${n} asesorado${n!==1?'s':''}${s.role==='owner'?' · ve todo el gym':''}</div>${revLine}</div>
-      <button class="btn bg bsm" onclick="event.stopPropagation();setStaffView('${esc(s.id)}')">Ver como</button>
+  const acts=s=>`<button class="btn bg bsm" onclick="event.stopPropagation();setStaffView('${esc(s.id)}')">Ver como</button>
       <button class="btn bg bsm" style="margin-left:6px" onclick="event.stopPropagation();openEditTrainer('${esc(s.id)}')">Editar</button>
       <button class="btn bg bsm" style="margin-left:6px;color:var(--rd)" onclick="event.stopPropagation();deleteTrainer('${esc(s.id)}')">🗑️</button>`;
-    list.appendChild(d);
-  });
+  const adminTag=s=>s.role==='owner'?'<span class="tag" style="background:var(--yll);color:#7a5c00;margin-left:4px">👑 Dueña/Admin</span>':'';
+
+  // ── Tarjetas (MÓVIL) ──
+  const cards=DB.staff.map(s=>{
+    const n=counts[s.id]||0, r=rev[s.id]||{revenue:0,alDia:0,vencidos:0};
+    const revLine=owner?`<div class="cm" style="margin-top:3px">💰 ${money(r.revenue)} este mes · <span style="color:var(--gt)">🟢 ${r.alDia} al día</span> · <span style="color:var(--rd)">🔴 ${r.vencidos} vencidos</span></div>`:'';
+    return `<div class="cli"><div class="cav" style="background:${avc(s.name)}">${esc(ini(s.name))}</div>
+      <div style="flex:1;min-width:0"><div class="cn">${esc(s.name)} ${adminTag(s)}</div>
+      <div class="cm">${n} asesorado${n!==1?'s':''}${s.role==='owner'?' · ve todo el gym':''}</div>${revLine}</div>${acts(s)}</div>`;
+  }).join('');
+  parts.push(`<div class="team-cards">${cards}</div>`);
+
+  // ── Tabla (ESCRITORIO) ──
+  const head=`<tr><th>Entrenador</th><th class="tt-num">Socios</th>${owner?'<th class="tt-num">Facturación mes</th><th class="tt-num">🟢 Al día</th><th class="tt-num">🔴 Vencidos</th>':''}<th class="tt-act"></th></tr>`;
+  const rows=DB.staff.map(s=>{
+    const n=counts[s.id]||0, r=rev[s.id]||{revenue:0,alDia:0,vencidos:0};
+    const money3=owner?`<td class="tt-num">${money(r.revenue)}</td><td class="tt-num" style="color:var(--gt)">${r.alDia}</td><td class="tt-num" style="color:var(--rd)">${r.vencidos}</td>`:'';
+    return `<tr><td class="tt-name"><span class="cav cav-sm" style="background:${avc(s.name)}">${esc(ini(s.name))}</span>${esc(s.name)} ${adminTag(s)}</td>
+      <td class="tt-num">${n}</td>${money3}<td class="tt-act">${acts(s)}</td></tr>`;
+  }).join('');
+  parts.push(`<table class="team-table"><thead>${head}</thead><tbody>${rows}</tbody></table>`);
+
+  // ── Aviso de sin asignar (ambas vistas) ──
   if(counts._unassigned>0){
-    const d=document.createElement('div');
-    d.style.cssText='padding:10px 14px;font-size:12.5px;color:var(--t2);background:var(--yll);border-radius:var(--rsm);margin-top:10px';
-    d.innerHTML=`⚠️ <b>${counts._unassigned}</b> asesorado${counts._unassigned!==1?'s':''} sin entrenador asignado — asígnalos editando cada asesorado.`;
-    list.appendChild(d);
+    parts.push(`<div style="padding:10px 14px;font-size:12.5px;color:var(--t2);background:var(--yll);border-radius:var(--rsm);margin-top:12px">⚠️ <b>${counts._unassigned}</b> asesorado${counts._unassigned!==1?'s':''} sin entrenador asignado — asígnalos editando cada asesorado.</div>`);
   }
+  list.innerHTML=parts.join('');
 }
 
 let _editTrainerId=null;
