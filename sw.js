@@ -1,4 +1,4 @@
-const CACHE_NAME = 'avigym-v29';
+const CACHE_NAME = 'avigym-v30';
 
 self.addEventListener('install', e => { self.skipWaiting(); });
 

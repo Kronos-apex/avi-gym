@@ -4025,7 +4025,9 @@ function initRememberMe(){
 // Gym ficticio completo (equipo + asesorados + historial + chats) para mostrar
 // en reuniones. canCloudWrite()=false y push bloqueado → CERO contacto con la nube.
 function enterDemoMode(){
-  if(!ld('ax_demo_seeded',false)){ seedDemoGym(); sv('ax_demo_seeded',1); }
+  // Versionado: al cambiar el seed se sube DEMO_SEED_VER y se re-siembra aunque ya existiera.
+  const DEMO_SEED_VER=3;
+  if(ld('ax_demo_seeded',0)!==DEMO_SEED_VER){ seedDemoGym(); sv('ax_demo_seeded',DEMO_SEED_VER); }
   AUTH_MODE=false;
   CUR.loggedAs='coach';
   showScreen('s-coach');
