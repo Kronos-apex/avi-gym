@@ -860,6 +860,10 @@ html[data-theme="light"] .mta {
   body.coach-view .cobros-table{display:table}
   body.coach-view .dtable{width:100%;border-collapse:collapse;font-size:14px;margin-top:2px;background:var(--w);border:1px solid var(--br);border-radius:var(--r);overflow:hidden}
   body.coach-view .dtable th{text-align:left;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--t3);padding:11px 14px;background:var(--bg);border-bottom:1.5px solid var(--br)}
+  body.coach-view .dtable th:not(.tt-act){cursor:pointer;user-select:none}
+  body.coach-view .dtable th:not(.tt-act):hover{color:var(--gt)}
+  body.coach-view .dtable th.sorted-asc::after{content:" ▲";font-size:8px;color:var(--g);vertical-align:middle}
+  body.coach-view .dtable th.sorted-desc::after{content:" ▼";font-size:8px;color:var(--g);vertical-align:middle}
   body.coach-view .dtable td{padding:12px 14px;border-bottom:1px solid var(--br);vertical-align:middle;color:var(--t1)}
   body.coach-view .dtable tbody tr:last-child td{border-bottom:none}
   body.coach-view .dtable tbody tr:hover{background:var(--bg)}
@@ -4272,9 +4276,9 @@ function renderTeam(){
   const head=`<tr><th>Entrenador</th><th class="tt-num">Socios</th>${owner?'<th class="tt-num">Facturación mes</th><th class="tt-num">🟢 Al día</th><th class="tt-num">🔴 Vencidos</th>':''}<th class="tt-act"></th></tr>`;
   const rows=DB.staff.map(s=>{
     const n=counts[s.id]||0, r=rev[s.id]||{revenue:0,alDia:0,vencidos:0};
-    const money3=owner?`<td class="tt-num">${money(r.revenue)}</td><td class="tt-num" style="color:var(--gt)">${r.alDia}</td><td class="tt-num" style="color:var(--rd)">${r.vencidos}</td>`:'';
+    const money3=owner?`<td class="tt-num" data-sort="${r.revenue}">${money(r.revenue)}</td><td class="tt-num" data-sort="${r.alDia}" style="color:var(--gt)">${r.alDia}</td><td class="tt-num" data-sort="${r.vencidos}" style="color:var(--rd)">${r.vencidos}</td>`:'';
     return `<tr><td class="tt-name"><span class="cav cav-sm" style="background:${avc(s.name)}">${esc(ini(s.name))}</span>${esc(s.name)} ${adminTag(s)}</td>
-      <td class="tt-num">${n}</td>${money3}<td class="tt-act">${acts(s)}</td></tr>`;
+      <td class="tt-num" data-sort="${n}">${n}</td>${money3}<td class="tt-act">${acts(s)}</td></tr>`;
   }).join('');
   parts.push(`<table class="team-table dtable"><thead>${head}</thead><tbody>${rows}</tbody></table>`);
 
@@ -4700,7 +4704,7 @@ function renderClients(){
     const vence=pays[0]?new Date(pays[0].dueDate).toLocaleDateString('es-CO',{day:'2-digit',month:'short'}):'—';
     const venceCol=st==='overdue'?'var(--rd)':st==='expiring'?'var(--or)':'var(--t2)';
     const trCell=showTrainer?`<td>${_trN?esc(_trN):'<span style="color:var(--t3)">Sin asignar</span>'}</td>`:'';
-    rows.push(`<tr class="cli-row" data-cid="${esc(c.id)}" data-search="${search}" onclick="openDetail('${esc(c.id)}')"><td class="tt-name"><span class="cav cav-sm" style="background:${avc(c.name)}">${esc(ini(c.name))}</span>${esc(c.name)}</td><td>${esc(c.goal||'—')}</td>${trCell}<td><span style="background:${badge.bg};color:${badge.color};font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap">${badge.label}</span></td><td style="color:${venceCol};white-space:nowrap">${vence}</td><td class="tt-act"><button class="btn bg bsm" onclick="event.stopPropagation();openDetail('${esc(c.id)}')">Ver →</button></td></tr>`);
+    rows.push(`<tr class="cli-row" data-cid="${esc(c.id)}" data-search="${search}" onclick="openDetail('${esc(c.id)}')"><td class="tt-name"><span class="cav cav-sm" style="background:${avc(c.name)}">${esc(ini(c.name))}</span>${esc(c.name)}</td><td>${esc(c.goal||'—')}</td>${trCell}<td data-sort="${({overdue:0,expiring:1,pending:2,active:3,inactive:4,suspended:5}[st]??9)}"><span style="background:${badge.bg};color:${badge.color};font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap">${badge.label}</span></td><td data-sort="${pays[0]?new Date(pays[0].dueDate).getTime():0}" style="color:${venceCol};white-space:nowrap">${vence}</td><td class="tt-act"><button class="btn bg bsm" onclick="event.stopPropagation();openDetail('${esc(c.id)}')">Ver →</button></td></tr>`);
   });
   const head=`<tr><th>Asesorado</th><th>Objetivo</th>${showTrainer?'<th>Entrenador</th>':''}<th>Estado</th><th>Vence</th><th class="tt-act"></th></tr>`;
   list.innerHTML=`<div class="cli-cards">${cards.join('')}</div><table class="cli-table dtable"><thead>${head}</thead><tbody>${rows.join('')}</tbody></table>`;
@@ -4749,13 +4753,34 @@ function renderCobros(){
       <div style="flex:1;min-width:0"><div class="cn">${esc(c.name)} ${badgeHTML}</div>
       <div class="cm">Vence ${vence} · ${monto}${showTrainer&&_trN?' · 🏋️ '+esc(_trN):''}</div></div>${payBtn}</div>`);
     // Fila (escritorio)
-    rows.push(`<tr data-cid="${esc(c.id)}" onclick="openDetail('${esc(c.id)}')"><td class="tt-name"><span class="cav cav-sm" style="background:${avc(c.name)}">${esc(ini(c.name))}</span>${esc(c.name)}</td>${showTrainer?`<td>${_trN?esc(_trN):'<span style="color:var(--t3)">Sin asignar</span>'}</td>`:''}<td>${badgeHTML}</td><td style="white-space:nowrap">${fdate(lp&&lp.date)}</td><td style="color:${venceCol};white-space:nowrap">${vence}</td><td class="tt-num">${monto}</td><td class="tt-act">${payBtn}</td></tr>`);
+    rows.push(`<tr data-cid="${esc(c.id)}" onclick="openDetail('${esc(c.id)}')"><td class="tt-name"><span class="cav cav-sm" style="background:${avc(c.name)}">${esc(ini(c.name))}</span>${esc(c.name)}</td>${showTrainer?`<td>${_trN?esc(_trN):'<span style="color:var(--t3)">Sin asignar</span>'}</td>`:''}<td data-sort="${ord[st]??9}">${badgeHTML}</td><td data-sort="${lp?new Date(lp.date).getTime():0}" style="white-space:nowrap">${fdate(lp&&lp.date)}</td><td data-sort="${lp?new Date(lp.dueDate).getTime():0}" style="color:${venceCol};white-space:nowrap">${vence}</td><td class="tt-num" data-sort="${lp&&lp.amount?lp.amount:0}">${monto}</td><td class="tt-act">${payBtn}</td></tr>`);
   });
   parts.push(`<div class="cobros-cards">${cards.join('')}</div>`);
   const head=`<tr><th>Socio</th>${showTrainer?'<th>Entrenador</th>':''}<th>Estado</th><th>Último pago</th><th>Vence</th><th class="tt-num">Monto</th><th class="tt-act"></th></tr>`;
   parts.push(`<table class="cobros-table dtable"><thead>${head}</thead><tbody>${rows.join('')}</tbody></table>`);
   list.innerHTML=parts.join('');
 }
+
+// Orden por columna para cualquier tabla .dtable (Equipo/Asesorados/Cobros).
+// Usa data-sort de la celda si existe (números/fechas crudos), si no el texto.
+function sortDtable(th){
+  if(!th||th.classList.contains('tt-act'))return;
+  const table=th.closest('table'),tbody=table&&table.tBodies[0];
+  if(!tbody)return;
+  const ths=[...th.parentNode.children],idx=ths.indexOf(th);
+  const dir=(String(idx)===table.dataset.sortCol&&table.dataset.sortDir==='asc')?'desc':'asc';
+  table.dataset.sortCol=idx;table.dataset.sortDir=dir;
+  ths.forEach(h=>h.classList.remove('sorted-asc','sorted-desc'));
+  th.classList.add(dir==='asc'?'sorted-asc':'sorted-desc');
+  const val=cell=>{if(!cell)return'';const ds=cell.getAttribute('data-sort');return (ds!=null&&ds!=='')?ds:cell.textContent.trim();};
+  [...tbody.rows].sort((a,b)=>{
+    const va=val(a.cells[idx]),vb=val(b.cells[idx]),na=parseFloat(va),nb=parseFloat(vb);
+    const bothNum=!isNaN(na)&&!isNaN(nb)&&/^-?\d/.test(va)&&/^-?\d/.test(vb);
+    const cmp=bothNum?(na-nb):String(va).localeCompare(String(vb),'es',{numeric:true});
+    return dir==='asc'?cmp:-cmp;
+  }).forEach(r=>tbody.appendChild(r));
+}
+document.addEventListener('click',e=>{const th=e.target.closest('.dtable thead th');if(th)sortDtable(th);});
 
 function _fillTrainerSelect(selectedId){
   const wrap=document.getElementById("cf-trainer-wrap"),sel=document.getElementById("cf-trainer");
