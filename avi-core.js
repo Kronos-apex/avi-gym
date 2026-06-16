@@ -912,15 +912,14 @@ function applyMood(routine, mood, opts) {
     }
 
     case 'periodo': {
-      // Regla de la dueña: nada de fuerza. Peso corporal + cardio suave.
-      let n = 0;
-      exs.forEach(e => { if (_isLoadedEx(e)) { _demoteToBodyweight(e); n++; } });
-      if (!exs.some(e => e.muscle === 'cardio')) exs.push(_cardioBlock('Cardio suave', 10));
-      adapt.title = 'Hoy cuidamos tu cuerpo 🩸';
-      adapt.why = 'En tu periodo bajamos la carga: trabajamos con peso corporal y cardio suave. Te mantienes activa sin exigirle de más a tu cuerpo.';
-      adapt.tone = 'b';
-      if (n) adapt.changes.push(n + (n === 1 ? ' ejercicio' : ' ejercicios') + ' → peso corporal');
-      adapt.changes.push('+ Cardio suave');
+      // Evidencia 2023-2025: la fase del ciclo NO afecta la fuerza ni la
+      // hipertrofia. "Nada de fuerza en el periodo" es un MITO. En vez de
+      // despojar la carga, EMPODERAMOS + autorregulación: si hay síntomas
+      // (cólicos/fatiga) ella marca 'Cansada'/'Con dolor' y esos estados
+      // ajustan. Ver docs/entrenamiento-femenino.md.
+      adapt.title = 'Entrena con confianza 🩸';
+      adapt.why = 'Estar en tu periodo no te frena: puedes entrenar fuerza con normalidad y además te hace bien (huesos, energía, ánimo). Escucha tu cuerpo — si hoy tienes cólicos o te sientes cansada, marca "Cansada" o "Con dolor" y ajustamos la sesión por ti.';
+      adapt.tone = 'g';
       break;
     }
 
