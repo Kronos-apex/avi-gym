@@ -1515,7 +1515,7 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
         <button class="btn bp" onclick="openAddClient()">+ Nuevo asesorado</button>
       </div>
       <div style="position:relative;margin-bottom:13px">
-        <input type="search" class="inp" id="cli-search" placeholder="🔍 Buscar por nombre o email..." oninput="filterClients(this.value)" style="padding-left:14px">
+        <input type="search" class="inp" id="cli-search" placeholder="🔍 Buscar por nombre o cédula..." oninput="filterClients(this.value)" style="padding-left:14px">
       </div>
       <div id="cli-list"></div>
     </div>
@@ -1874,7 +1874,7 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
     </div>
     <div class="fg"><label class="ilbl">Entorno de entrenamiento</label><select class="sel" id="cf-place"><option value="gym">🏋️ Gym completo</option><option value="casa">🏠 Casa (bandas / mancuernas)</option><option value="corporal">🤸 Solo peso corporal</option><option value="parque">🌳 Aire libre / parque</option></select></div>
     <div class="fg" id="cf-trainer-wrap" style="display:none"><label class="ilbl">Entrenador asignado</label><select class="sel" id="cf-trainer"></select></div>
-    <div class="fg"><label class="ilbl">WhatsApp (con código de país)</label><input class="inp" id="cf-phone" type="tel" placeholder="Ej: 573001234567"></div>
+    <div class="frow"><div class="fg"><label class="ilbl">Cédula / documento *</label><input class="inp" id="cf-cedula" type="text" inputmode="numeric" maxlength="20" placeholder="Ej: 1012345678"></div><div class="fg"><label class="ilbl">WhatsApp (con código de país)</label><input class="inp" id="cf-phone" type="tel" placeholder="Ej: 573001234567"></div></div>
     <div class="fg"><label class="ilbl">Notas (lesiones, restricciones, patologías...)</label><textarea class="tarea" id="cf-notes" maxlength="500" placeholder="Ej: Dolor lumbar crónico, evitar peso muerto convencional. Alérgica a la lactosa..."></textarea></div>
     <div class="mdfooter"><button class="btn bg" onclick="cm('m-client')">Cancelar</button><button class="btn bp" onclick="saveClient()" id="save-cli-btn">Guardar</button></div>
   </div>
@@ -4232,6 +4232,13 @@ function renderStaffUI(){
   else { if(nm)nm.textContent=getCoachName(); if(rl)rl.textContent='Entrenador personal'; if(av)av.textContent='C'; }
 }
 
+// Mes seleccionado para los resúmenes de plata (Equipo/Cobros). '' = mes actual.
+let repMonth='';
+function repYM(){ if(repMonth){const p=repMonth.split('-');return {year:+p[0],month:(+p[1])-1};} const d=new Date();return {year:d.getFullYear(),month:d.getMonth()}; }
+function repMonthVal(){ if(repMonth)return repMonth; const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function setRepMonth(v){ repMonth=v||''; renderTeam(); renderCobros(); }
+function repMonthInput(){ return `<input type="month" value="${repMonthVal()}" onchange="setRepMonth(this.value)" style="font-family:inherit;font-size:12px;font-weight:600;padding:4px 9px;border:1px solid var(--br2);border-radius:8px;background:var(--w);color:var(--t1);cursor:pointer">`; }
+
 function renderTeam(){
   const list=document.getElementById('team-list');if(!list)return;
   if(!DB.staff.length){
@@ -4241,7 +4248,7 @@ function renderTeam(){
   const counts=staffCounts(DB.clients,DB.staff);
   // Pantalla del dueño: facturación + estado del gym y por entrenador (solo la dueña/admin
   // ve la plata; un entrenador "viendo como" no ve los números de los demás).
-  const rev=staffRevenue(DB.clients,DB.staff);
+  const rev=staffRevenue(DB.clients,DB.staff,repYM());
   const owner=(typeof isOwnerView==='function')?isOwnerView():true;
   const money=n=>'$'+Math.round(n||0).toLocaleString('es-CO');
   const parts=[];
@@ -4249,7 +4256,7 @@ function renderTeam(){
   if(owner){
     const t=rev._total;
     parts.push(`<div style="background:var(--gl);border:1px solid var(--g);border-radius:var(--r);padding:14px 16px;margin-bottom:14px">
-      <div style="font-size:12px;color:var(--t2);font-weight:800;letter-spacing:.3px;margin-bottom:10px">📊 RESUMEN DEL GYM · ESTE MES</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><div style="font-size:12px;color:var(--t2);font-weight:800;letter-spacing:.3px">📊 RESUMEN DEL GYM</div>${repMonthInput()}</div>
       <div style="display:flex;gap:20px;flex-wrap:wrap">
         <div><div style="font-size:21px;font-weight:800;color:var(--t1)">${money(t.revenue)}</div><div style="font-size:11px;color:var(--t2)">ingresos del mes</div></div>
         <div><div style="font-size:21px;font-weight:800;color:var(--gt)">${t.alDia}</div><div style="font-size:11px;color:var(--t2)">al día</div></div>
@@ -4695,7 +4702,7 @@ function renderClients(){
       routineStr=`<div style="font-size:11px;color:var(--t3);margin-top:3px">Sin rutinas asignadas</div>`;
     }
     const _trN=trainerName(c.trainerId)||'';
-    const search=esc(`${c.name} ${c.goal||''} ${c.level||''} ${_trN}`.toLowerCase());
+    const search=esc(`${c.name} ${c.cedula||''} ${c.goal||''} ${c.level||''} ${_trN}`.toLowerCase());
     // ── Tarjeta (MÓVIL) ──
     cards.push(`<div class="cli" data-cid="${esc(c.id)}" data-search="${search}" onclick="openDetail('${esc(c.id)}')"><div class="cav" style="background:${avc(c.name)}">${esc(ini(c.name))}</div><div style="flex:1;min-width:0"><div class="cn">${esc(c.name)}</div><div class="cm">${esc(c.goal||'')} · ${esc(c.level||'')} · ${esc(String(c.days||3))} días/sem</div>${routineStr}${last?`<div style="font-size:11px;color:var(--t3);margin-top:2px">💬 "${esc(last.text.slice(0,45))}${last.text.length>45?'...':''}"</div>`:''}</div><div style="text-align:right;flex-shrink:0">${miniSparkline(c.id)}<span class="tag ${c.level==='Principiante'?'tg':c.level==='Intermedio'?'tb':'to'}">${c.level||'—'}</span>${c.selfReg?(c.wantsCoach?'<span class="tag" style="background:var(--orl);color:var(--or);margin-left:4px">🙋 Quiere coach</span>':'<span class="tag" style="background:var(--bll);color:#1a4a7a;margin-left:4px">🆓 Libre</span>'):''}${_trChip(c)}<div style="font-size:11px;color:var(--t2);margin-top:4px">${(c.routines||[]).length} rutina${(c.routines||[]).length!==1?'s':''}</div></div><button class="btn bg bsm" style="margin-left:8px" onclick="event.stopPropagation();openDetail('${esc(c.id)}')">Ver →</button></div>`);
     // ── Fila (ESCRITORIO) ──
@@ -4704,9 +4711,9 @@ function renderClients(){
     const vence=pays[0]?new Date(pays[0].dueDate).toLocaleDateString('es-CO',{day:'2-digit',month:'short'}):'—';
     const venceCol=st==='overdue'?'var(--rd)':st==='expiring'?'var(--or)':'var(--t2)';
     const trCell=showTrainer?`<td>${_trN?esc(_trN):'<span style="color:var(--t3)">Sin asignar</span>'}</td>`:'';
-    rows.push(`<tr class="cli-row" data-cid="${esc(c.id)}" data-search="${search}" onclick="openDetail('${esc(c.id)}')"><td class="tt-name"><span class="cav cav-sm" style="background:${avc(c.name)}">${esc(ini(c.name))}</span>${esc(c.name)}</td><td>${esc(c.goal||'—')}</td>${trCell}<td data-sort="${({overdue:0,expiring:1,pending:2,active:3,inactive:4,suspended:5}[st]??9)}"><span style="background:${badge.bg};color:${badge.color};font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap">${badge.label}</span></td><td data-sort="${pays[0]?new Date(pays[0].dueDate).getTime():0}" style="color:${venceCol};white-space:nowrap">${vence}</td><td class="tt-act"><button class="btn bg bsm" onclick="event.stopPropagation();openDetail('${esc(c.id)}')">Ver →</button></td></tr>`);
+    rows.push(`<tr class="cli-row" data-cid="${esc(c.id)}" data-search="${search}" onclick="openDetail('${esc(c.id)}')"><td class="tt-name"><span class="cav cav-sm" style="background:${avc(c.name)}">${esc(ini(c.name))}</span>${esc(c.name)}</td><td style="font-family:'JetBrains Mono',monospace;font-size:13px">${esc(c.cedula||'—')}</td><td>${esc(c.goal||'—')}</td>${trCell}<td data-sort="${({overdue:0,expiring:1,pending:2,active:3,inactive:4,suspended:5}[st]??9)}"><span style="background:${badge.bg};color:${badge.color};font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap">${badge.label}</span></td><td data-sort="${pays[0]?new Date(pays[0].dueDate).getTime():0}" style="color:${venceCol};white-space:nowrap">${vence}</td><td class="tt-act"><button class="btn bg bsm" onclick="event.stopPropagation();openDetail('${esc(c.id)}')">Ver →</button></td></tr>`);
   });
-  const head=`<tr><th>Asesorado</th><th>Objetivo</th>${showTrainer?'<th>Entrenador</th>':''}<th>Estado</th><th>Vence</th><th class="tt-act"></th></tr>`;
+  const head=`<tr><th>Asesorado</th><th>Cédula</th><th>Objetivo</th>${showTrainer?'<th>Entrenador</th>':''}<th>Estado</th><th>Vence</th><th class="tt-act"></th></tr>`;
   list.innerHTML=`<div class="cli-cards">${cards.join('')}</div><table class="cli-table dtable"><thead>${head}</thead><tbody>${rows.join('')}</tbody></table>`;
 }
 
@@ -4719,7 +4726,7 @@ function renderCobros(){
   const money=n=>'$'+Math.round(n||0).toLocaleString('es-CO');
   if(!_vc.length){ list.innerHTML='<div class="empty"><div class="eico">💳</div><div class="etxt">Sin asesorados todavía</div><div class="esub">Cuando registres socios y pagos, aquí ves los cobros</div></div>'; return; }
   // Resumen del mes + conteos por estado
-  const now=new Date(),y=now.getFullYear(),mo=now.getMonth();
+  const ym=repYM(),y=ym.year,mo=ym.month;
   let ingr=0,cExp=0,cVen=0,cPen=0;
   _vc.forEach(c=>{
     (c.payments||[]).forEach(p=>{const d=new Date(p.date);if(d.getFullYear()===y&&d.getMonth()===mo)ingr+=parseFloat(p.amount)||0;});
@@ -4733,7 +4740,7 @@ function renderCobros(){
   const parts=[];
   // Resumen
   parts.push(`<div style="background:var(--gl);border:1px solid var(--g);border-radius:var(--r);padding:14px 16px;margin-bottom:14px">
-    <div style="font-size:12px;color:var(--t2);font-weight:800;letter-spacing:.3px;margin-bottom:10px">💰 COBROS · ESTE MES</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><div style="font-size:12px;color:var(--t2);font-weight:800;letter-spacing:.3px">💰 COBROS</div>${repMonthInput()}</div>
     <div style="display:flex;gap:20px;flex-wrap:wrap">
       <div><div style="font-size:21px;font-weight:800;color:var(--t1)">${money(ingr)}</div><div style="font-size:11px;color:var(--t2)">ingresos del mes</div></div>
       <div><div style="font-size:21px;font-weight:800;color:var(--or)">${cExp}</div><div style="font-size:11px;color:var(--t2)">por vencer</div></div>
@@ -4789,7 +4796,7 @@ function _fillTrainerSelect(selectedId){
   wrap.style.display="block";
   sel.innerHTML='<option value="">Sin asignar</option>'+DB.staff.map(s=>`<option value="${esc(s.id)}" ${s.id===selectedId?'selected':''}>${esc(s.name)}${s.role==='owner'?' (admin)':''}</option>`).join('');
 }
-function openAddClient(){CUR.editClientId=null;document.getElementById('mc-title').textContent='Nuevo asesorado';document.getElementById('save-cli-btn').textContent='Guardar';['cf-name','cf-last','cf-email','cf-pass','cf-weight','cf-height','cf-age','cf-phone','cf-notes'].forEach(id=>document.getElementById(id).value='');document.getElementById('cf-goal').value='Perder grasa';document.getElementById('cf-level').value='Principiante';document.getElementById('cf-days').value='3';document.getElementById('cf-place').value='gym';document.getElementById('cf-sex').value='';document.getElementById('cf-activity').value='1.55';_fillTrainerSelect((activeStaff()&&activeStaff().role==='trainer')?CUR.staffId:'');om('m-client')}
+function openAddClient(){CUR.editClientId=null;document.getElementById('mc-title').textContent='Nuevo asesorado';document.getElementById('save-cli-btn').textContent='Guardar';['cf-name','cf-last','cf-email','cf-pass','cf-weight','cf-height','cf-age','cf-cedula','cf-phone','cf-notes'].forEach(id=>document.getElementById(id).value='');document.getElementById('cf-goal').value='Perder grasa';document.getElementById('cf-level').value='Principiante';document.getElementById('cf-days').value='3';document.getElementById('cf-place').value='gym';document.getElementById('cf-sex').value='';document.getElementById('cf-activity').value='1.55';_fillTrainerSelect((activeStaff()&&activeStaff().role==='trainer')?CUR.staffId:'');om('m-client')}
 
 function openEditClient(){
   const c=DB.clients.find(x=>x.id===CUR.clientId);if(!c)return;
@@ -4809,6 +4816,7 @@ function openEditClient(){
   document.getElementById('cf-activity').value=c.activityFactor||'1.55';
   document.getElementById('cf-days').value=c.days||'3';
   document.getElementById('cf-place').value=c.place||'gym';
+  document.getElementById('cf-cedula').value=c.cedula||'';
   document.getElementById('cf-phone').value=c.phone||'';
   document.getElementById('cf-notes').value=c.notes||'';
   _fillTrainerSelect(c.trainerId||'');
@@ -4823,6 +4831,10 @@ async function saveClient(){
   if(!fn){toast('⚠️ El nombre es obligatorio');return}
   if(!CUR.editClientId&&(!email||!pass)){toast('⚠️ Email y contraseña son obligatorios');return}
   if(pass&&pass.length<4){toast('⚠️ La contraseña debe tener al menos 4 caracteres');return}
+  const cedula=document.getElementById('cf-cedula').value.trim().replace(/\s/g,'');
+  if(!cedula){toast('⚠️ La cédula / documento es obligatoria');return}
+  const dupCed=DB.clients.find(c=>c.cedula&&c.cedula===cedula&&c.id!==CUR.editClientId);
+  if(dupCed){toast('⚠️ Ya existe un asesorado con esa cédula');return}
   const dup=DB.clients.find(c=>c.email&&c.email.toLowerCase()===email&&c.id!==CUR.editClientId);
   if(dup){toast('⚠️ Ya existe un asesorado con ese email');return}
   const clientId=CUR.editClientId||uid();
@@ -4841,6 +4853,7 @@ async function saveClient(){
     place:document.getElementById('cf-place').value||'gym',
     notes:document.getElementById('cf-notes').value.trim(),
     phone:document.getElementById('cf-phone').value.trim(),
+    cedula,
     trainerId:document.getElementById('cf-trainer').value||null, // F2: entrenador asignado (null = sin asignar)
     updatedAt:new Date().toISOString()
   };
