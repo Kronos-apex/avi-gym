@@ -4976,7 +4976,9 @@ async function signupClient(){
   if(btn){btn.disabled=true;}
   try{
     // 1. Crear cuenta en Supabase Auth (la contraseña la maneja Auth; el perfil va en metadata)
-    const meta={name:data.name,goal:data.goal,level:data.level,days:data.days,sex:data.sex,age:data.age,weight:data.weight,height:data.height,place:data.place,selfReg:true};
+    // gymId + gymCode viajan en el meta para que el candado server-side (trigger en auth.users)
+    // valide el código del gym en el backend, no solo en el cliente. Ver enforce_gym_signup_code().
+    const meta={name:data.name,goal:data.goal,level:data.level,days:data.days,sex:data.sex,age:data.age,weight:data.weight,height:data.height,place:data.place,selfReg:true,gymId:(window.GYM_CONFIG||{}).id||'',gymCode:(g('su-code')||{}).value||''};
     let res;
     try{ res=await AUTH.signUpEmail(data.email,data.password,meta); }
     catch(e){ err.textContent='No se pudo crear la cuenta. Intenta de nuevo.';err.classList.add('on');return; }
