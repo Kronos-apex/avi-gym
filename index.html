@@ -2218,7 +2218,7 @@ function fmtD(d){return new Date(d).toLocaleDateString('es-ES',{day:'numeric',mo
 // ══════════ SUPABASE SYNC ══════════
 const SB_URL='https://yndpryhirbhlhlkmxyyv.supabase.co';
 const SB_KEY='sb_publishable_S0JLM0phVe2pH7gkSz_-_A_VNevQ5qZ';
-const SB_KEYS=['ax_c','ax_e','ax_m','ax_hist','ax_pr','ax_bw','ax_tpl','ax_ce','ax_cn','ax_nut','ax_med','ax_photos','ax_cph','ax_site','ax_nequi'];
+const SB_KEYS=['ax_c','ax_e','ax_m','ax_hist','ax_pr','ax_bw','ax_tpl','ax_ce','ax_cn','ax_nut','ax_med','ax_photos','ax_cph','ax_site','ax_nequi','ax_prod','ax_sales'];
 const VAPID_PUBLIC='BDsRSaTwaMhAmcZhLPEZhWsklZPJ9C_myGv3Ak7Nqd59LAeEQJqlKCVLDhCX0Je9UWe_sEuoMRbu-OjW_oy0erk';
 
 // ══════════ SUPABASE AUTH — Fase 2 (login real, fila por usuario) ══════════
@@ -2561,6 +2561,10 @@ function _persistAuthUserDebounced(k,v){
   _udDebounce[k]=setTimeout(()=>_persistAuthUser(k,v),800);
 }
 async function _persistAuthUser(k,v){
+  // Tienda (productos/ventas) = coach-global → va a la fila PROPIA del usuario logueado
+  // (el coach/dueña), columnas products/sales. No es por-cliente, así que va antes del coach-write.
+  if(k==='ax_prod'){ try{ await UD.upsertOwn({products:v}); }catch(e){ warn('AVI: sync tienda (products) falló:',e&&e.message); } return; }
+  if(k==='ax_sales'){ try{ await UD.upsertOwn({sales:v}); }catch(e){ warn('AVI: sync tienda (sales) falló:',e&&e.message); } return; }
   // Coach en modo auth: escribe la fila del cliente que cambió (no la suya). Ver _persistCoachWrite.
   if(AUTH_ROLE==='coach' && !COACH_SELF){ return await _persistCoachWrite(k,v); }
   // COACH_SELF (coach en su propio entreno) o cliente normal → escribe en SU propia fila.
@@ -4503,6 +4507,8 @@ function renderHome(){
       if(d.getFullYear()===y&&d.getMonth()===mo) ingr+=(parseFloat(p.amount)||0);
     });
   });
+  // + ventas de la tienda del mes (ingreso total = membresías + tienda)
+  (DB.sales||[]).forEach(s=>{const d=new Date(s.date);if(d.getFullYear()===y&&d.getMonth()===mo) ingr+=(s.total||0);});
   const elIngr=document.getElementById('h-ingr');if(elIngr)elIngr.textContent='$'+ingr.toLocaleString('es-CO');
 
   // ── Activos ──
@@ -4785,6 +4791,8 @@ function renderCobros(){
     (c.payments||[]).forEach(p=>{const d=new Date(p.date);if(d.getFullYear()===y&&d.getMonth()===mo)ingr+=parseFloat(p.amount)||0;});
     const st=MS.getStatus(c); if(st==='expiring')cExp++;else if(st==='overdue')cVen++;else if(st==='pending')cPen++;
   });
+  // + ventas de la tienda del mes (ingreso total = membresías + tienda)
+  (DB.sales||[]).forEach(s=>{const d=new Date(s.date);if(d.getFullYear()===y&&d.getMonth()===mo)ingr+=(s.total||0);});
   const ord={'overdue':0,'expiring':1,'pending':2,'active':3,'inactive':4,'suspended':5};
   const sorted=[..._vc].sort((a,b)=>(ord[MS.getStatus(a)]??9)-(ord[MS.getStatus(b)]??9));
   const lastPay=c=>{const ps=(c.payments||[]).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));return ps[0]||null;};
@@ -5255,6 +5263,11 @@ async function _loadCoachClientsIntoDB(){
 }
 
 async function _enterCoachAuth(authUser, ownRow){
+  // Tienda en la nube: productos/ventas viven en la fila del coach (columnas products/sales).
+  if(ownRow){
+    if(Array.isArray(ownRow.products)){ DB.products=ownRow.products; try{localStorage.setItem('ax_prod',JSON.stringify(DB.products));}catch(e){} }
+    if(Array.isArray(ownRow.sales)){ DB.sales=ownRow.sales; try{localStorage.setItem('ax_sales',JSON.stringify(DB.sales));}catch(e){} }
+  }
   await _loadCoachClientsIntoDB();
   CUR.loggedAs='coach'; CUR.clientId=null; COACH_SELF=false;
   showScreen('s-coach');
