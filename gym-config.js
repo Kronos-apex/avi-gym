@@ -25,6 +25,11 @@
       fullName: 'AVI — Entrenamiento Personal',
       tagline: 'Entrenamiento con nombre propio',
       taglineHtml: 'Entrenamiento con <b>nombre propio.</b>',
+      // Código que el gym entrega a sus miembros para auto-registrarse (B2B gate).
+      // Cámbialo por el que quieras darle a tu gimnasio. Vacío/ausente = registro abierto.
+      // El usuario lo escribe ignorando mayúsculas/espacios. (Gate client-side: frena
+      // a randoms con el link, no es un candado criptográfico — ver checkGymCode.)
+      signupCode: 'AVIGYM-2026',
       colors: null,                          // null = usar los tokens default del CSS (esmeralda AVI)
       dark: null,                            // null = superficies dark default (verde profundo)
       hdrGrad: null                          // null = --emerald-hdr default

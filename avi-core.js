@@ -705,6 +705,24 @@ function validateSignup(data, clients, coachEmail) {
   return { ok: true };
 }
 
+// ── Gate de registro por código de gimnasio ──
+// El SaaS es B2B: el gym entrega un código a sus miembros para que se registren.
+// Si el gym activo define GYM_CONFIG.signupCode (no vacío), el auto-registro lo exige;
+// sin código configurado el gate queda ABIERTO (demo / gyms que no lo quieran).
+// Comparación tolerante: ignora mayúsculas y espacios para no frustrar al usuario.
+// NOTA: es un gate client-side (el código va en el JS público) → frena a randoms con el
+// link, no a un atacante técnico; el candado server-side es un follow-up aparte.
+function _normGymCode(s) { return String(s == null ? '' : s).trim().toUpperCase().replace(/\s+/g, ''); }
+function gymCodeRequired(gymConfig) {
+  return !!(gymConfig && typeof gymConfig.signupCode === 'string' && gymConfig.signupCode.trim());
+}
+function checkGymCode(input, gymConfig) {
+  if (!gymCodeRequired(gymConfig)) return { ok: true };
+  if (!_normGymCode(input)) return { ok: false, error: 'Ingresa el código de tu gimnasio para continuar.' };
+  if (_normGymCode(input) === _normGymCode(gymConfig.signupCode)) return { ok: true };
+  return { ok: false, error: 'Código incorrecto. Pídelo en la recepción de tu gimnasio.' };
+}
+
 // ── ¿Es usuario en modo libre (gratis, sin coach)? ──
 // Gating de funciones Premium. Libre = tier 'libre' (auto-registrados). Los asesorados
 // creados por el coach NO tienen tier → no son libres → acceso completo. Convertir a
@@ -976,6 +994,8 @@ if (typeof module !== 'undefined' && module.exports) {
     bmiFrom,
     bodyLoadProfile,
     validateSignup,
+    gymCodeRequired,
+    checkGymCode,
     isFreeClient,
     USER_DATA_COLLECTIONS,
     clientToRow,

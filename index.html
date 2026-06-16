@@ -1173,7 +1173,7 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
     <!-- Bienvenida: dos opciones (estilo elegante, sin volcar toda la info) -->
     <div class="cin-cta" id="cin-cta">
       <button class="cin-cta-fill" onclick="document.getElementById('cin-cta').style.display='none';document.getElementById('cin-card').style.display='block';var e=document.getElementById('lu');if(e)setTimeout(function(){e.focus()},50)">Iniciar sesión</button>
-      <button class="cin-cta-out" onclick="document.getElementById('cin-cta').style.display='none';document.getElementById('cin-signup').style.display='block';WZ.open();var e=document.getElementById('su-name');if(e)setTimeout(function(){e.focus()},60)">Crear cuenta</button>
+      <button class="cin-cta-out" onclick="document.getElementById('cin-cta').style.display='none';document.getElementById('cin-signup').style.display='block';WZ.open();var e=document.getElementById(WZ.steps[0]==='wz-s-code'?'su-code':'su-name');if(e)setTimeout(function(){e.focus()},60)">Crear cuenta</button>
     </div>
 
     <div id="install-hint" class="cin-install">
@@ -1224,6 +1224,16 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
       <select id="su-level" hidden><option>Principiante</option><option>Intermedio</option><option>Avanzado</option></select>
       <select id="su-days" hidden><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select>
       <select id="su-sex" hidden><option value="">—</option><option value="M">Masculino</option><option value="F">Femenino</option></select>
+
+      <!-- ACCESO · Código de gimnasio (solo aparece si el gym lo exige; lo inserta WZ.open) -->
+      <div class="wz-step" id="wz-s-code">
+        <div class="wz-eyebrow">Acceso · Tu gimnasio</div>
+        <div class="wz-q">Ingresa el <b>código</b> de tu gym</div>
+        <div class="wz-help">Tu gimnasio te lo entregó al inscribirte. Si no lo tienes, pídelo en recepción.</div>
+        <label class="cin-lbl">Código de acceso</label>
+        <input id="su-code" maxlength="40" class="cin-in" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Ej: AVIGYM-2026" style="text-transform:uppercase" onkeydown="if(event.key==='Enter')WZ.next()">
+        <div class="wz-foot"><button class="cin-btn" onclick="WZ.next()">Continuar →</button></div>
+      </div>
 
       <!-- PASO 1 · Nombre -->
       <div class="wz-step on" id="wz-s-name">
@@ -4871,10 +4881,15 @@ async function backToCoachPanel(){
 // creación de cuenta NO cambia.
 // ══════════════════════════════════════════
 const WZ={
+  // Los 7 pasos del wizard; WZ.open() le antepone 'wz-s-code' si el gym exige código.
+  baseSteps:['wz-s-name','wz-s-goal','wz-s-place','wz-s-level','wz-s-when','wz-s-body','wz-s-account'],
   steps:['wz-s-name','wz-s-goal','wz-s-place','wz-s-level','wz-s-when','wz-s-body','wz-s-account'],
   cur:0,
   open(){
     this.cur=0;
+    // gate B2B: si el gym activo define signupCode, el código es el primer paso
+    const gated = (typeof gymCodeRequired==='function') && gymCodeRequired(window.GYM_CONFIG);
+    this.steps = gated ? ['wz-s-code'].concat(this.baseSteps) : this.baseSteps.slice();
     // limpia selecciones previas y re-aplica el día por defecto (3)
     document.querySelectorAll('#cin-signup .wz-chip.on,#cin-signup .wz-gchip.on').forEach(c=>c.classList.remove('on'));
     const d3=document.getElementById('wz-day3'); if(d3)d3.classList.add('on');
@@ -4883,9 +4898,14 @@ const WZ={
   },
   _sync(){
     this.steps.forEach((id,i)=>{const el=document.getElementById(id);if(el)el.classList.toggle('on',i===this.cur);});
-    const pct=Math.round((this.cur+1)/this.steps.length*100);
-    const f=document.getElementById('wz-fill'); if(f)f.style.width=pct+'%';
-    const c=document.getElementById('wz-count'); if(c)c.textContent='0'+(this.cur+1)+'/0'+this.steps.length;
+    // el código es un gate de acceso, no un paso numerado → la barra cuenta solo los 7 reales
+    const cur=this.steps[this.cur];
+    const real=this.steps.filter(s=>s!=='wz-s-code');
+    const f=document.getElementById('wz-fill');
+    const c=document.getElementById('wz-count');
+    if(cur==='wz-s-code'){ if(f)f.style.width='5%'; if(c)c.textContent='🔒'; }
+    else { const ri=real.indexOf(cur); const pct=Math.round((ri+1)/real.length*100);
+      if(f)f.style.width=pct+'%'; if(c)c.textContent='0'+(ri+1)+'/0'+real.length; }
     const e=document.getElementById('su-err'); if(e)e.classList.remove('on');
     const sg=document.getElementById('cin-signup'); if(sg)sg.scrollTop=0;
   },
@@ -4917,7 +4937,13 @@ const WZ={
   },
   _err(msg){ const e=document.getElementById('su-err'); if(e){e.textContent=msg;e.classList.add('on');} },
   _valid(){
-    if(this.steps[this.cur]==='wz-s-name'){
+    const step=this.steps[this.cur];
+    if(step==='wz-s-code'){
+      const inp=document.getElementById('su-code');
+      const r=(typeof checkGymCode==='function')?checkGymCode(inp?inp.value:'',window.GYM_CONFIG):{ok:true};
+      if(!r.ok){ this._err(r.error); return false; }
+    }
+    if(step==='wz-s-name'){
       const n=document.getElementById('su-name');
       if(!n||!n.value.trim()){ this._err('Escribe tu nombre para continuar'); return false; }
     }
@@ -4942,6 +4968,9 @@ async function signupClient(){
     weight:parseFloat(g('su-weight').value)||null,
     height:parseFloat(g('su-height').value)||null,
   };
+  // Gate B2B: el código del gym se exige antes de tocar Supabase (también validado en el wizard)
+  const cg=checkGymCode((g('su-code')||{}).value,window.GYM_CONFIG);
+  if(!cg.ok){err.textContent=cg.error;err.classList.add('on');return;}
   const v=validateSignup(data,[],getCoachEmail()); // unicidad la valida Supabase Auth
   if(!v.ok){err.textContent=v.error;err.classList.add('on');return;}
   if(!AUTH.ready()){err.textContent='Sin conexión para crear la cuenta. Revisa tu internet.';err.classList.add('on');return;}
@@ -4979,6 +5008,9 @@ async function signupClient(){
 // _profileFromMeta las recupera → genera su semana → Reveal nuevo (no el formulario viejo).
 function wzGoogle(){
   const g=id=>{const e=document.getElementById(id);return e?e.value:'';};
+  // Gate B2B: sin el código del gym no se permite tampoco el registro por Google
+  const cg=checkGymCode(g('su-code'),window.GYM_CONFIG);
+  if(!cg.ok){ const e=document.getElementById('su-err'); if(e){e.textContent=cg.error;e.classList.add('on');} WZ.cur=0; WZ._sync(); return; }
   const name=(g('su-name')||'').trim();
   if(!name){ const e=document.getElementById('su-err'); if(e){e.textContent='Escribe tu nombre antes de continuar con Google';e.classList.add('on');} WZ.cur=0; WZ._sync(); return; }
   try{
