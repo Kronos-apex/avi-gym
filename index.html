@@ -4608,20 +4608,23 @@ function renderPaymentCard(client){
   if(!con)return;
   const nequi=DB.nequi||ld('ax_nequi','');
   const st=MS.getStatus(client);
-  if(!nequi||st!=='expiring'){con.innerHTML='';return;}
+  if(!nequi||(st!=='expiring'&&st!=='overdue')){con.innerHTML='';return;}
+  const vencido=st==='overdue';
   const pays=(client.payments||[]).slice().sort((a,b)=>new Date(b.dueDate)-new Date(a.dueDate));
   const last=pays[0];
   const dueStr=last?new Date(last.dueDate).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'}):'';
   const amount=last&&last.amount?'$'+Number(last.amount).toLocaleString('es-CO')+' COP':'';
   con.innerHTML=`<div style="background:var(--yll);border:1.5px solid var(--yl);border-radius:var(--r);padding:14px 16px">
-    <div style="font-size:13px;font-weight:800;color:var(--t1);margin-bottom:4px">💳 Tu plan vence pronto</div>
-    ${dueStr?`<div style="font-size:12px;color:var(--t2);opacity:.85;margin-bottom:10px">Vence: ${dueStr}${amount?' · '+amount:''}</div>`:''}
+    <div style="font-size:13px;font-weight:800;color:var(--t1);margin-bottom:4px">${vencido?'⚠️ Tu plan está vencido':'💳 Tu plan vence pronto'}</div>
+    ${dueStr?`<div style="font-size:12px;color:var(--t2);opacity:.85;margin-bottom:10px">${vencido?'Venció':'Vence'}: ${dueStr}${amount?' · '+amount:''}</div>`:''}
     <div style="font-size:12px;color:var(--t2);margin-bottom:6px">Paga por <strong>Nequi</strong> al número de tu coach:</div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
       <div style="font-size:20px;font-weight:800;letter-spacing:1px;color:var(--t1);font-family:'JetBrains Mono',monospace">${esc(nequi)}</div>
       <button onclick="copyNequi('${esc(nequi)}')" style="font-size:11px;padding:5px 12px;border-radius:20px;border:1px solid var(--br2);background:var(--bg);color:var(--t2);cursor:pointer;font-family:inherit;font-weight:600">Copiar</button>
     </div>
     <button onclick="notifyPaid()" style="width:100%;padding:11px;background:var(--g);color:white;border:none;border-radius:var(--rsm);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer">✅ Ya pagué — Notificar al coach</button>
+    <input type="file" id="payproof-input" accept="image/*" capture="environment" style="display:none" onchange="sendPaymentProof()">
+    <button onclick="document.getElementById('payproof-input').click()" style="width:100%;margin-top:8px;padding:11px;background:var(--bg);color:var(--t1);border:1.5px solid var(--g);border-radius:var(--rsm);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer">📸 Enviar soporte de pago</button>
   </div>`;
 }
 
@@ -4640,6 +4643,36 @@ async function notifyPaid(){
   renderClientMsgs(clientId);
   pushToClient('_coach','💳 '+client.name+' notificó su pago','Revisa y confirma el pago en AVI',{type:'payment',tag:'avi-payment-'+clientId});
   toast('✅ Notificación enviada a tu coach');
+}
+
+// Soporte de pago Nequi: el socio sube la FOTO del comprobante. Viaja como mensaje de chat
+// con campo img (reusa uploadPhotoToStorage + compressImage); el coach lo ve en Mensajes y
+// confirma el pago desde su flujo. En demo no toca la nube (queda base64 inline).
+async function sendPaymentProof(){
+  const clientId=CUR.clientId;
+  const client=DB.clients.find(c=>c.id===clientId);
+  const input=document.getElementById('payproof-input');
+  if(!client||!input||!input.files||!input.files[0])return;
+  const file=input.files[0];
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    let base64=e.target.result;
+    toast('⏳ Subiendo soporte…');
+    try{ base64=await compressImage(base64,100000); }catch(_e){}
+    let src=base64;
+    if(typeof DEMO_MODE==='undefined'||!DEMO_MODE){
+      try{ src=await uploadPhotoToStorage(clientId,'nequi-'+uid(),base64); }
+      catch(err){ warn('soporte de pago: upload falló, queda base64',err&&err.message); }
+    }
+    if(!DB.msgs[clientId])DB.msgs[clientId]=[];
+    DB.msgs[clientId].push({from:'client',text:'📸 Soporte de pago Nequi',img:src,date:new Date().toISOString()});
+    svNow('ax_m',DB.msgs);
+    renderClientMsgs(clientId);
+    pushToClient('_coach','💳 '+client.name+' envió su soporte de pago','Revisa el comprobante y confirma el pago en AVI',{type:'payment',tag:'avi-payment-'+clientId});
+    input.value='';
+    toast('📸 Soporte enviado a tu coach');
+  };
+  reader.readAsDataURL(file);
 }
 
 
@@ -6203,7 +6236,8 @@ function renderDetailMsgs(id){
   if(!msgs.length){con.innerHTML='<div style="text-align:center;padding:18px;color:var(--t3);font-size:13px">Sin mensajes. Escribe el primero 👇</div>';return}
   msgs.forEach(m=>{
     const isC=m.from==='coach';
-    const b=document.createElement('div');b.className=`mb ${isC?'cs':'cl'}`;b.textContent=m.text||'';con.appendChild(b);
+    if(m.text){const b=document.createElement('div');b.className=`mb ${isC?'cs':'cl'}`;b.textContent=m.text;con.appendChild(b);}
+    if(m.img)con.appendChild(_msgImg(m.img,isC));
     const t=document.createElement('div');t.className=`mt${isC?' r':''}`;t.textContent=`${isC?'Coach':'Asesorado'} · ${fmtD(m.date)} ${fmtT(m.date)}`;con.appendChild(t);
   });
   con.scrollTop=con.scrollHeight;
@@ -7603,6 +7637,18 @@ function updateMsgBadge(clientId){
   else{badge.removeAttribute('data-count');}
 }
 
+// Burbuja de imagen en el chat (soporte de pago Nequi, etc.); clic = abre la foto completa.
+function _msgImg(url,isC){
+  const wrap=document.createElement('div');
+  wrap.className=`mb ${isC?'cs':'cl'}`;
+  wrap.style.cssText+=';padding:4px;cursor:pointer';
+  const img=document.createElement('img');
+  img.src=url; img.alt='Soporte de pago';
+  img.style.cssText='max-width:180px;max-height:240px;border-radius:8px;display:block';
+  img.onclick=()=>{ try{ window.open(url,'_blank'); }catch(e){} };
+  wrap.appendChild(img);
+  return wrap;
+}
 function renderClientMsgs(clientId){
   const msgs=DB.msgs[clientId]||[];const con=document.getElementById('cn-msg-thread');con.innerHTML='';
   const composer=document.getElementById('cn-msg-composer');
@@ -7611,7 +7657,8 @@ function renderClientMsgs(clientId){
   if(!msgs.length){con.innerHTML='<div style="text-align:center;padding:18px;color:var(--t3);font-size:13px">Tu coach todavía no te ha escrito.<br>Puedes escribirle tú primero 👇</div>';return}
   msgs.forEach(m=>{
     const isC=m.from==='coach';
-    const b=document.createElement('div');b.className=`mb ${isC?'cs':'cl'}`;b.textContent=m.text||'';con.appendChild(b);
+    if(m.text){const b=document.createElement('div');b.className=`mb ${isC?'cs':'cl'}`;b.textContent=m.text;con.appendChild(b);}
+    if(m.img)con.appendChild(_msgImg(m.img,isC));
     const t=document.createElement('div');t.className=`mt${isC?' r':''}`;t.textContent=`${isC?'Coach':'Tú'} · ${fmtD(m.date)} ${fmtT(m.date)}`;con.appendChild(t);
   });
   con.scrollTop=con.scrollHeight;
