@@ -994,6 +994,28 @@ function applyMood(routine, mood, opts) {
   return out;
 }
 
+// ── Check-in QR (Kiosko de recepción) ──
+// Ventana anti-doble-conteo: un mismo socio no suma 2 visitas seguidas.
+const CHECKIN_WINDOW_MIN = 5;
+
+// ¿Se debe REGISTRAR la asistencia? false si ya hubo un check-in de ese socio dentro de la
+// ventana (evita duplicar al reescanear). attendance = [{clientId, ts}]. Puro y testeable.
+function canCheckin(clientId, attendance, now, windowMin) {
+  if (!clientId) return false;
+  now = now || Date.now();
+  const win = (windowMin != null ? windowMin : CHECKIN_WINDOW_MIN) * 60000;
+  return !(attendance || []).some(a =>
+    a && a.clientId === clientId && (now - new Date(a.ts).getTime()) < win
+  );
+}
+
+// Decisión de acceso del kiosko: verde (pasa) si la membresía permite entrar, rojo si no.
+// Reusa memberStatus (single-source). Devuelve {allow, status}. Puro y testeable.
+function accessDecision(client, now) {
+  const status = memberStatus(client, now);
+  return { allow: status === 'active' || status === 'expiring' || status === 'pending', status };
+}
+
 // ── Exportación dual: navegador (global) + Node (module.exports) ──
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
@@ -1004,6 +1026,9 @@ if (typeof module !== 'undefined' && module.exports) {
     unassignTrainer,
     staffById,
     memberStatus,
+    canCheckin,
+    accessDecision,
+    CHECKIN_WINDOW_MIN,
     staffRevenue,
     validateStaff,
     getIccLabel,

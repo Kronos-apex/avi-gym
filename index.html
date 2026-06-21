@@ -1645,6 +1645,7 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
         <button class="btn bp" onclick="openAddTrainer()">+ Entrenador</button>
       </div>
       <div id="team-list"></div>
+      <div id="reception-block"></div>
     </div>
     <!-- COBROS -->
     <div id="p-cobros" class="panel">
@@ -1738,6 +1739,7 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
       <div id="cn-profile-upsell"></div>
       <div id="cn-account-card"></div>
       <div id="cn-payment-card" style="margin-bottom:12px"></div>
+      <div id="cn-access-card" style="margin-bottom:12px"></div>
 
       <!-- Plan nutricional cliente (se oculta hasta que el coach lo asigna) -->
       <div class="card" style="margin-bottom:12px" id="cn-nut-card">
@@ -1838,6 +1840,26 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
   </div>
 </div>
 
+<!-- KIOSKO DE RECEPCIÓN (check-in QR de la puerta) -->
+<div id="s-reception" class="screen" style="flex-direction:column;background:#0b0f14;color:#fff">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:rgba(0,0,0,.35)">
+    <div style="font-weight:800;font-size:16px" id="kiosk-title">🛎️ Recepción</div>
+    <button class="btn bsm" onclick="exitKiosk()" style="background:rgba(255,255,255,.14);color:#fff;border:none">Salir</button>
+  </div>
+  <div style="flex:1;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center">
+    <video id="kiosk-video" playsinline muted style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>
+    <canvas id="kiosk-canvas" style="display:none"></canvas>
+    <div style="position:relative;width:min(70vw,320px);aspect-ratio:1;border:3px solid rgba(255,255,255,.85);border-radius:24px;box-shadow:0 0 0 9999px rgba(0,0,0,.4)"></div>
+    <div id="kiosk-hint" style="position:absolute;bottom:24px;left:0;right:0;text-align:center;font-size:15px;font-weight:700;text-shadow:0 1px 4px rgba(0,0,0,.6)">Apunta a la cámara el código QR del socio</div>
+    <div id="kiosk-result" style="display:none;position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;background:#1c7a3f">
+      <div id="kiosk-result-icon" style="font-size:84px;line-height:1;margin-bottom:14px"></div>
+      <div id="kiosk-result-name" style="font-size:30px;font-weight:800;margin-bottom:8px"></div>
+      <div id="kiosk-result-msg" style="font-size:18px;font-weight:600;opacity:.95"></div>
+    </div>
+  </div>
+  <div id="kiosk-err" style="display:none;padding:14px 18px;background:#7a1d1d;color:#fff;font-size:13px;text-align:center"></div>
+</div>
+
 <!-- MODALS -->
 <!-- Add/Edit Client -->
 <!-- Eliminar cuenta -->
@@ -1858,6 +1880,21 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
       <button class="btn bg" onclick="cm('m-delacct')">Cancelar</button>
       <button class="btn bsm" id="delacct-go" disabled onclick="confirmDeleteAccount()"
         style="background:#c0392b;color:#fff;font-weight:700">Eliminar definitivamente</button>
+    </div>
+  </div>
+</div>
+
+<div class="mdbg" id="m-reception">
+  <div class="md">
+    <div class="mdtitle">🛎️ Cuenta de recepción</div>
+    <div style="font-size:13px;color:var(--t2);margin-bottom:14px;line-height:1.5">Crea un acceso para la recepción del gym. Con esta cuenta, la PC/tablet de la puerta entra al <strong>Kiosko de acceso</strong> para escanear el QR de los socios y validar su membresía.</div>
+    <div class="fg" style="margin-bottom:10px"><label class="ilbl">Nombre *</label><input type="text" class="inp" id="rcp-name" maxlength="60" placeholder="Ej: Recepción Forza" style="width:100%;padding:10px 12px"></div>
+    <div class="fg" style="margin-bottom:10px"><label class="ilbl">Email (para entrar) *</label><input class="inp" id="rcp-email" type="email" maxlength="100" placeholder="recepcion@gym.com" style="width:100%;padding:10px 12px"></div>
+    <div class="fg" style="margin-bottom:10px"><label class="ilbl">Contraseña * (mín. 6)</label><div style="position:relative"><input type="password" class="inp" id="rcp-pass" maxlength="100" placeholder="••••••" style="width:100%;padding:10px 42px 10px 12px"><button type="button" onclick="togglePass(this,'rcp-pass')" aria-label="Mostrar contraseña" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:17px;line-height:1;padding:4px;opacity:.6">👁</button></div></div>
+    <div id="rcp-err" style="display:none;color:#c0392b;font-size:12px;margin-bottom:8px"></div>
+    <div class="mdfooter">
+      <button class="btn bg" onclick="cm('m-reception')">Cancelar</button>
+      <button class="btn bp" id="rcp-go" onclick="submitReception()">Crear cuenta</button>
     </div>
   </div>
 </div>
@@ -2166,6 +2203,9 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
 </div>
 
 <script src="avi-core.js"></script>
+<!-- Kiosko de recepción: lector QR (jsQR) + generador QR del socio (qrcodejs). Ambos MIT, vendidos local (sin CDN → PWA offline). -->
+<script src="vendor/jsqr.min.js"></script>
+<script src="vendor/qrcode.min.js"></script>
 <script>
 'use strict';
 
@@ -2286,6 +2326,14 @@ const UD={
     if(error){warn('UD.loadCoachClients:',error.message);return [];}
     return data||[];
   },
+  // Para la RECEPCIÓN: los socios del gym (coach_id = el dueño). La RLS user_data_select_reception
+  // (coach_id = reception_coach_id()) lo permite. ownerId = coach_id de la fila de la recepción.
+  async loadGymClients(ownerId){
+    const c=AUTH.client();if(!c||!ownerId)return [];
+    const {data,error}=await c.from('user_data').select('*').eq('coach_id',ownerId);
+    if(error){warn('UD.loadGymClients:',error.message);return [];}
+    return data||[];
+  },
   // Actualiza la fila de un cliente (el coach puede por RLS: coach_id = su uid). UPDATE
   // (no upsert: el INSERT lo bloquea la política WITH CHECK auth.uid()=user_id). Para 2.2e-2.
   async updateClientRow(clientId,patch){
@@ -2310,7 +2358,8 @@ const UD={
 // `apex_data` (los datos viven en user_data vía UD) → evita contaminar la nube legacy
 // durante la transición. Persiste solo lo del usuario por su propia fila (2.2d).
 let AUTH_MODE=false;
-let AUTH_ROLE='client'; // 'client' | 'coach' — rol del usuario auth logueado
+let AUTH_ROLE='client'; // 'client' | 'coach' | 'reception' — rol del usuario auth logueado
+let RECEPTION_OWNER_ID=null; // gym (coach_id del dueño) cuando AUTH_ROLE==='reception'
 let COACH_SELF=false;   // true cuando el coach está viendo SU propio entrenamiento (guarda en su fila)
 // UID del coach (modelo de un solo coach). Cada socio se provisiona con este coach_id
 // para que su fila sea visible por RLS (select: coach_id = auth.uid()) y sus mensajes
@@ -4307,6 +4356,7 @@ function setRepMonth(v){ repMonth=v||''; renderTeam(); renderCobros(); renderTie
 function repMonthInput(){ return `<input type="month" value="${repMonthVal()}" onchange="setRepMonth(this.value)" style="font-family:inherit;font-size:12px;font-weight:600;padding:4px 9px;border:1px solid var(--br2);border-radius:8px;background:var(--w);color:var(--t1);cursor:pointer">`; }
 
 function renderTeam(){
+  renderReception();
   const list=document.getElementById('team-list');if(!list)return;
   if(!DB.staff.length){
     list.innerHTML=`<div style="padding:20px 0"><div style="text-align:center;padding:8px 0 20px"><div style="width:56px;height:56px;border-radius:50%;background:var(--gl);display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 12px">🏋️</div><div style="font-size:17px;font-weight:800;color:var(--t1);margin-bottom:6px">Configura tu equipo</div><div style="font-size:13px;color:var(--t2);margin-bottom:18px;line-height:1.5">Agrega a la dueña/admin y a cada entrenador.<br>Cada uno verá solo sus asesorados.</div><button class="btn bp" onclick="openAddTrainer()" style="padding:12px 28px;font-size:14px">+ Agregar entrenador</button></div></div>`;
@@ -4361,6 +4411,80 @@ function renderTeam(){
     parts.push(`<div style="padding:10px 14px;font-size:12.5px;color:var(--t2);background:var(--yll);border-radius:var(--rsm);margin-top:12px">⚠️ <b>${counts._unassigned}</b> asesorado${counts._unassigned!==1?'s':''} sin entrenador asignado — asígnalos editando cada asesorado.</div>`);
   }
   list.innerHTML=parts.join('');
+}
+
+// ── Recepción / Acceso: cuenta auth real (role='reception') para el Kiosko de check-in QR.
+// La crea el dueño vía la edge-function create-reception. Solo visible para la dueña en modo nube.
+let _receptions=null; // cache de cuentas de recepción del gym (cloud); null = sin cargar
+function renderReception(){
+  const box=document.getElementById('reception-block'); if(!box)return;
+  const owner=(typeof isOwnerView==='function')?isOwnerView():true;
+  const demo=(typeof DEMO_MODE!=='undefined' && DEMO_MODE);
+  // La recepción es una cuenta auth real → solo la dueña en modo nube (o en la demo, como vitrina).
+  if(!owner || (AUTH_ROLE!=='coach' && !demo)){ box.innerHTML=''; return; }
+  let listHtml;
+  if(demo){
+    listHtml='<div class="cm" style="color:var(--t2)">🎬 En la demo no se crean cuentas reales.</div>';
+  } else if(_receptions===null){
+    listHtml='<div class="cm" style="color:var(--t2)">Cargando…</div>';
+    refreshReceptions();
+  } else if(!_receptions.length){
+    listHtml='<div class="cm" style="color:var(--t2)">Aún no has creado la cuenta de recepción.</div>';
+  } else {
+    listHtml=_receptions.map(r=>{
+      const nm=(r.profile&&r.profile.name)||'Recepción';
+      const em=(r.profile&&r.profile.email)||'';
+      return `<div class="cli"><div class="cav" style="background:var(--g)">🛎️</div><div style="flex:1;min-width:0"><div class="cn">${esc(nm)}</div><div class="cm">${esc(em)}</div></div></div>`;
+    }).join('');
+  }
+  box.innerHTML=`<div style="margin-top:22px;border-top:1px solid var(--br);padding-top:18px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <div><div class="ptitle" style="font-size:17px">🛎️ Recepción / Acceso</div><div class="psub">Cuenta para la PC/tablet de la puerta: escanea el QR de los socios y valida su acceso.</div></div>
+      <button class="btn bp" onclick="openReceptionModal()"${demo?' disabled style="opacity:.5"':''}>+ Cuenta de recepción</button>
+    </div>
+    <div id="reception-list">${listHtml}</div>
+  </div>`;
+}
+async function refreshReceptions(){
+  try{
+    const c=(typeof AUTH!=='undefined')?AUTH.client():null;
+    if(!c){ _receptions=[]; renderReception(); return; }
+    const {data,error}=await c.from('user_data').select('user_id,profile,role').eq('role','reception');
+    _receptions = error ? [] : (data||[]);
+  }catch(e){ _receptions=[]; }
+  renderReception();
+}
+function openReceptionModal(){
+  ['rcp-name','rcp-email','rcp-pass'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const err=document.getElementById('rcp-err'); if(err)err.style.display='none';
+  om('m-reception');
+}
+async function submitReception(){
+  const name=(document.getElementById('rcp-name').value||'').trim();
+  const email=(document.getElementById('rcp-email').value||'').trim().toLowerCase();
+  const pass=(document.getElementById('rcp-pass').value||'');
+  const err=document.getElementById('rcp-err'), btn=document.getElementById('rcp-go');
+  const fail=m=>{ if(err){err.textContent=m;err.style.display='block';} };
+  if(err)err.style.display='none';
+  if(!name||!email||pass.length<6){ fail('Nombre, email y contraseña (mín. 6) son obligatorios.'); return; }
+  const c=(typeof AUTH!=='undefined')?AUTH.client():null;
+  if(!c){ fail('No hay conexión con el servidor. Intenta de nuevo.'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='Creando…'; }
+  try{
+    const { data, error } = await c.functions.invoke('create-reception',{ body:{ name, email, password:pass } });
+    if(error) throw new Error(error.message||'Error de red');
+    if(!data || !data.ok){
+      const e=(data&&data.error)||'No se pudo crear';
+      throw new Error(e==='only_owner'?'Solo el dueño puede crear la recepción.':e);
+    }
+    cm('m-reception');
+    toast('🛎️ Cuenta de recepción creada');
+    _receptions=null; renderReception(); // re-fetch la lista
+  }catch(e){
+    fail('No se pudo crear ('+((e&&e.message)||e)+').');
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='Crear cuenta'; }
+  }
 }
 
 let _editTrainerId=null;
@@ -4458,6 +4582,26 @@ const MS={
     }[s])||{label:'Sin pago',color:'var(--t2)',bg:'var(--br)'};
   }
 };
+
+// "Mi acceso": QR del socio (= su clientId) para mostrar en el Kiosko de recepción. Offline.
+function renderAccessCard(client){
+  const box=document.getElementById('cn-access-card'); if(!box)return;
+  if(!client||!client.id){ box.innerHTML=''; return; }
+  box.innerHTML=`<div class="card" style="margin-bottom:12px;text-align:center;padding:18px 16px">
+    <div class="ctitle" style="margin-bottom:4px">🎫 Mi acceso</div>
+    <div style="font-size:12.5px;color:var(--t2);margin-bottom:14px;line-height:1.5">Muestra este código en la recepción para registrar tu entrada al gym.</div>
+    <div id="cn-access-qr" style="display:inline-block;background:#fff;padding:12px;border-radius:14px;min-width:120px;min-height:120px"></div>
+    <div style="font-size:11px;color:var(--t2);margin-top:10px;opacity:.75">${esc(client.name||'')}</div>
+  </div>`;
+  const holder=document.getElementById('cn-access-qr');
+  if(holder && typeof QRCode!=='undefined'){
+    holder.innerHTML='';
+    try{ new QRCode(holder,{text:String(client.id),width:200,height:200,correctLevel:QRCode.CorrectLevel.M}); }
+    catch(e){ holder.innerHTML='<div style="color:#c0392b;font-size:12px;padding:24px">No se pudo generar el código</div>'; }
+  } else if(holder){
+    holder.innerHTML='<div style="color:#888;font-size:12px;padding:24px">Cargando código…</div>';
+  }
+}
 
 function renderPaymentCard(client){
   const con=document.getElementById('cn-payment-card');
@@ -5206,6 +5350,8 @@ async function _enterAuthSession(authUser){
   const row=await UD.loadOwn();
   // Rol coach: carga SOLO sus clientes (filas con coach_id = su uid) y abre el panel.
   if(row&&row.role==='coach'){ AUTH_ROLE='coach'; return await _enterCoachAuth(authUser,row); }
+  // Rol recepción: cuenta del kiosko de la puerta. Carga los socios del gym (RLS) y abre el Kiosko.
+  if(row&&row.role==='reception'){ AUTH_ROLE='reception'; return await _enterReceptionAuth(authUser,row); }
   AUTH_ROLE='client';
   let client;
   if(row){
@@ -5283,6 +5429,100 @@ async function _enterCoachAuth(authUser, ownRow){
   showScreen('s-coach');
   initCoach();
   return null;
+}
+
+// Recepción (kiosko de la puerta): carga los socios del gym en SOLO LECTURA (RLS por
+// reception_coach_id) y abre el Kiosko de check-in QR. No edita nada de los socios.
+async function _enterReceptionAuth(authUser,row){
+  RECEPTION_OWNER_ID=(row&&row.coach_id)||null;
+  try{
+    const rows=await UD.loadGymClients(RECEPTION_OWNER_ID);
+    DB.clients=rows.map(rowToClient);
+  }catch(e){ warn('recepción: no se cargaron socios',e); DB.clients=DB.clients||[]; }
+  CUR.loggedAs='reception'; CUR.clientId=null;
+  const nm=(row&&row.profile&&row.profile.name)||'Recepción';
+  showScreen('s-reception');
+  initKiosk(nm);
+  return null;
+}
+
+// ════════════════ KIOSKO DE CHECK-IN QR (recepción) ════════════════
+// Loop de cámara → jsQR → valida membresía (accessDecision/memberStatus) → verde/rojo +
+// registra asistencia (tabla attendance, append-only). Dedupe por canCheckin. Demo = solo local.
+let _kioskStream=null,_kioskRAF=null,_kioskBusy=false,_kioskAtt=[],_kioskResumeT=null;
+async function initKiosk(name){
+  const t=document.getElementById('kiosk-title'); if(t)t.textContent='🛎️ '+(name||'Recepción');
+  _kioskAtt=[]; _kioskBusy=false; _kioskHideResult();
+  const err=document.getElementById('kiosk-err'); if(err)err.style.display='none';
+  if(typeof jsQR==='undefined'){ _kioskError('No se cargó el lector de QR. Recarga la página.'); return; }
+  try{
+    _kioskStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    const v=document.getElementById('kiosk-video');
+    v.srcObject=_kioskStream; await v.play().catch(()=>{});
+    if(_kioskRAF)cancelAnimationFrame(_kioskRAF);
+    _kioskRAF=requestAnimationFrame(_kioskScan);
+  }catch(e){
+    _kioskError('No se pudo abrir la cámara. Revisa los permisos del navegador (y que la página sea https).');
+  }
+}
+function _kioskScan(){
+  _kioskRAF=requestAnimationFrame(_kioskScan);
+  if(_kioskBusy)return;
+  const v=document.getElementById('kiosk-video');
+  if(!v||v.readyState<2)return;
+  const w=v.videoWidth,h=v.videoHeight; if(!w||!h)return;
+  const cv=document.getElementById('kiosk-canvas'); cv.width=w; cv.height=h;
+  const ctx=cv.getContext('2d',{willReadFrequently:true});
+  ctx.drawImage(v,0,0,w,h);
+  let img; try{ img=ctx.getImageData(0,0,w,h); }catch(e){ return; }
+  const code=jsQR(img.data,w,h,{inversionAttempts:'dontInvert'});
+  if(code&&code.data) _kioskHandle(code.data.trim());
+}
+function _kioskHandle(token){
+  if(_kioskBusy)return;
+  _kioskBusy=true;
+  const client=(DB.clients||[]).find(c=>c&&c.id===token);
+  if(!client){
+    _kioskShow('❓','Código no reconocido','Pide al socio abrir "Mi acceso" en la app','#5b6470');
+  } else {
+    const dec=accessDecision(client);
+    if(dec.allow){
+      if(canCheckin(client.id,_kioskAtt,Date.now())) _recordCheckin(client,dec.status);
+      const sub=dec.status==='expiring'?'Tu plan vence pronto':(dec.status==='pending'?'¡Bienvenido!':'Acceso permitido');
+      _kioskShow('✅','Adelante, '+(client.name||''),sub,'#1c7a3f');
+    } else {
+      _kioskShow('⛔',(client.name||'Socio'),dec.status==='overdue'?'Plan vencido — pasa a recepción':'Acceso inactivo — pasa a recepción','#9b1c1c');
+    }
+  }
+  _kioskResume();
+}
+// Registra la visita: local (dedupe + demo) y, en la nube, en la tabla append-only attendance.
+function _recordCheckin(client,status){
+  _kioskAtt.push({clientId:client.id,ts:Date.now()});
+  if(typeof DEMO_MODE!=='undefined'&&DEMO_MODE)return; // demo: jamás tocar la nube
+  try{
+    const c=(typeof AUTH!=='undefined')?AUTH.client():null;
+    if(c&&RECEPTION_OWNER_ID){
+      c.from('attendance').insert({owner_id:RECEPTION_OWNER_ID,client_id:client.id,client_name:client.name||'',status:status})
+        .then(({error})=>{ if(error)warn('attendance insert:',error.message); });
+    }
+  }catch(e){ warn('attendance insert err',e); }
+}
+function _kioskShow(icon,name,msg,bg){
+  const r=document.getElementById('kiosk-result'); if(!r)return;
+  document.getElementById('kiosk-result-icon').textContent=icon;
+  document.getElementById('kiosk-result-name').textContent=name;
+  document.getElementById('kiosk-result-msg').textContent=msg||'';
+  r.style.background=bg||'#1c7a3f'; r.style.display='flex';
+}
+function _kioskHideResult(){ const r=document.getElementById('kiosk-result'); if(r)r.style.display='none'; }
+function _kioskResume(){ clearTimeout(_kioskResumeT); _kioskResumeT=setTimeout(()=>{ _kioskHideResult(); _kioskBusy=false; },2800); }
+function _kioskError(m){ const e=document.getElementById('kiosk-err'); if(e){e.textContent=m;e.style.display='block';} }
+async function exitKiosk(){
+  if(_kioskRAF){ cancelAnimationFrame(_kioskRAF); _kioskRAF=null; }
+  if(_kioskStream){ try{_kioskStream.getTracks().forEach(t=>t.stop());}catch(e){} _kioskStream=null; }
+  try{ if(typeof AUTH!=='undefined') await AUTH.signOut(); }catch(e){}
+  location.reload();
 }
 
 // "Mi entrenamiento": el coach ve/entrena su PROPIA rutina (su fila user_data) reusando la
@@ -6121,7 +6361,7 @@ function cnTab(id,el){
   }
   if(id==='cn-profile'&&CUR.clientId){
     const c=DB.clients.find(x=>x.id===CUR.clientId);
-    if(c){renderClientProfile(c);}
+    if(c){renderClientProfile(c);renderAccessCard(c);}
     setTheme(ld('ax_theme','dark'));
   }
   if(id==='cn-history'&&CUR.clientId){
